@@ -1,4 +1,6 @@
+require 'protobuf/common/util'
 require 'protobuf/descriptor/descriptor_proto'
+require 'utils/word_utils'
 
 module Protobuf
   module Node
@@ -21,7 +23,7 @@ module Protobuf
       attr_reader :children
 
       def initialize(children)
-        @children = children
+        @children = children || []
       end
 
       def accept_message_visitor(visitor)
@@ -71,9 +73,9 @@ require 'protobuf/message/extend'
       end
 
       def accept_message_visitor(visitor)
+        visitor.package = @path_list.dup
         @path_list.each do |path|
-          camelized_name = path.to_s.gsub(/(?:\A|_)(\w)/) { $1.upcase }
-          visitor.write("module #{camelized_name}")
+          visitor.write("module #{Util.camelize(path)}")
           visitor.increment
         end
       end
@@ -175,7 +177,7 @@ require 'protobuf/message/extend'
       end
 
       def accept_message_visitor(visitor)
-        visitor.write("#{@name} = #{@value}")
+        visitor.write("define :#{@name}, #{@value}")
       end
 
       def accept_descriptor_visitor(visitor)
@@ -251,7 +253,7 @@ require 'protobuf/message/extend'
           opts << ', :extension => true'
         end
         type = if @type.is_a?(Array)
-               then (@type.size > 1) ? "'#{@type.join '::'}'" : @type[0]
+               then (@type.size > 1) ? "'#{@type.map{|e| WordUtils.camelize(e) }.join('::')}'" : @type[0]
                else @type
                end
         visitor.write("#{@label} :#{type}, :#{@name}, #{@value}#{opts}")

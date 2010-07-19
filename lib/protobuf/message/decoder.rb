@@ -41,29 +41,29 @@ module Protobuf
       [tag, wire_type]
     end
 
-    # Read varint value from +stream+. Returns +Integer+.
+    # Read varint integer value from +stream+.
     def read_varint(stream)
       read_method = stream.respond_to?(:readbyte) ? :readbyte : :readchar
       value = index = 0
       begin
-        byte = stream.send(read_method)
+        byte = stream.__send__(read_method)
         value |= (byte & 0x7f) << (7 * index)
         index += 1
       end while (byte & 0x80).nonzero?
       value
     end
 
-    # Read 32-bit value from +stream+. Returns +String+.
+    # Read 32-bit string value from +stream+.
     def read_fixed32(stream)
       stream.read(4)
     end
 
-    # Read 64-bit value from +stream+. Returns +String+.
+    # Read 64-bit string value from +stream+.
     def read_fixed64(stream)
       stream.read(8)
     end
 
-    # Read length-delimited value from +stream+. Returns +String+.
+    # Read length-delimited string value from +stream+.
     def read_length_delimited(stream)
       value_length = read_varint(stream)
       stream.read(value_length)

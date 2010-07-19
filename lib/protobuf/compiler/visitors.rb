@@ -19,9 +19,9 @@ module Protobuf
           end
         end
 
+        FileUtils.mkpath(File.dirname(filename))
         File.open(filename, 'w') do |file|
           log_writing(filename)
-          FileUtils.mkpath(File.dirname(filename))
           file.write(contents)
         end
         FileUtils.chmod(0755, filename) if executable
@@ -33,7 +33,7 @@ module Protobuf
     end
 
     class CreateMessageVisitor < Base
-      attr_accessor :indent, :context, :attach_proto, :proto_file
+      attr_accessor :package, :indent, :context, :attach_proto, :proto_file
 
       def initialize(proto_file=nil, proto_dir='.', out_dir='.')
         @proto_dir, @out_dir = proto_dir, out_dir
@@ -98,15 +98,43 @@ module Protobuf
       end
 
       def required_message_from_proto(proto_file)
-        rb_path = proto_file.sub(/\.proto\z/, '.pb.rb')
-        unless File.exist?("#{@out_dir}/#{rb_path}")
+        
+        # Need to go get the package directive from the proto file
+        # to accurately give the require path
+        # This is super tedious... but not sure what else to do at this point
+        module_path = nil
+        File.open(@proto_dir+"/"+proto_file) do |file|
+          while (line = file.gets)
+            if line =~ /^\s*package ([a-z_.]+);/i
+              module_path = WordUtils.package_to_path($1)
+              break
+            end
+          end
+        end
+        
+        rb_path = [
+          @out_dir,
+          module_path,
+          proto_file.sub(/\.proto\z/, '.pb.rb')
+        ].join('/')
+        
+        unless File.exist?(rb_path)
           Compiler.compile(proto_file, @proto_dir, @out_dir)
         end
+        
         rb_path.sub(/\.rb$/, '')
       end
 
       def create_files(filename, out_dir, file_create)
+        old_lp = $:
+        $: << File.expand_path(out_dir)
         Class.new.class_eval(to_s) # check the message
+        $:.delete File.expand_path(out_dir)
+        
+        file = File.basename(filename)
+        message_module = WordUtils.module_to_path(package.map{|p| p.to_s.capitalize}.join('::'))
+        filename = "#{out_dir}/#{message_module}/#{file}"
+        
         if file_create
           log_writing(filename)
           FileUtils.mkpath(File.dirname(filename))
@@ -132,7 +160,7 @@ module Protobuf
       end
 
       def add_rpc(name, request, response)
-        (@services[@current_service] ||= []) << [name, request.first, response.first]
+        (@services[@current_service] ||= []) << [name, WordUtils.moduleize(request), WordUtils.moduleize(response)]
       end
 
       def create_files(message_file, out_dir, create_file=true)
@@ -141,37 +169,39 @@ module Protobuf
         @services.each do |service_name, rpcs|
           underscored_name = underscore service_name.to_s
           message_module = package.map{|p| p.to_s.capitalize}.join('::')
-          required_file = message_file.sub(/^\.\//, '').sub(/\.rb$/, '')
+          required_file = [
+            out_dir,
+            WordUtils.module_to_path(message_module),
+            File.basename(message_file.sub(/^\.\//, '').sub(/\.rb$/, ''))
+          ].join('/')
 
-          create_bin(out_dir, underscored_name, message_module, service_name, default_port)
-          create_service(message_file, out_dir, underscored_name, message_module,
-            service_name, default_port, rpcs, required_file)
-          rpcs.each do |name, request, response|
-            create_client(out_dir, underscored_name, default_port, name, request, response,
-              message_module, required_file)
-          end
+          # TODO: removed bin creation
+          # create_bin(out_dir, underscored_name, message_module, service_name, default_port)
+          create_service(message_file, out_dir, underscored_name, message_module, service_name, default_port, rpcs, required_file)
+          # TODO: removed client creation
+          # rpcs.each do |name, request, response|
+          #   create_client(out_dir, underscored_name, default_port, name, request, response, message_module, required_file)
+          # end
         end
         @file_contents
       end
 
       def create_bin(out_dir, underscored_name, module_name, service_name, default_port)
-        bin_filename = "#{out_dir}/start_#{underscored_name}"
+        bin_filename = "#{out_dir}/bin/start_#{underscored_name}"
         bin_contents = template_erb('rpc_bin').result(binding)
         create_file_with_backup(bin_filename, bin_contents, true) if @create_file
         @file_contents[bin_filename] = bin_contents
       end
 
-      def create_service(message_file, out_dir, underscored_name, module_name, service_name,
-        default_port, rpcs, required_file)
-        service_filename = "#{out_dir}/#{underscored_name}.rb"
-        service_contents = template_erb('rpc_service').result(binding)
+      def create_service(message_file, out_dir, underscored_name, module_name, service_name, default_port, rpcs, required_file)
+        service_filename = "#{out_dir}/#{WordUtils.module_to_path(module_name)}/#{underscored_name}.rb"
+        service_contents = template_erb('rpc_service_implementation').result(binding)
         create_file_with_backup(service_filename, service_contents) if @create_file
         @file_contents[service_filename] = service_contents
       end
 
-      def create_client(out_dir, underscored_name, default_port, name, request, response,
-        message_module, required_file)
-        client_filename = "#{out_dir}/client_#{underscore name}.rb"
+      def create_client(out_dir, underscored_name, default_port, name, request, response, message_module, required_file)
+        client_filename = "#{out_dir}/clients/#{WordUtils.module_to_path(message_module)}_client_#{underscore name}.rb"
         client_contents = template_erb('rpc_client').result binding
         create_file_with_backup(client_filename, client_contents, true) if @create_file
         @file_contents[client_filename] = client_contents

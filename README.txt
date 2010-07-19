@@ -1,10 +1,10 @@
 = RubyProtobuf
 
-* http://code.google.com/p/ruby-protobuf
+* http://github.com/dcardon/ruby-protobuf
 
 == DESCRIPTION:
 
-Protocol Buffers for Ruby.
+Protocol Buffers for Ruby that works.
 
 == FEATURES/PROBLEMS:
 

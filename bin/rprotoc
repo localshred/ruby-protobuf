@@ -31,11 +31,11 @@ rescue OptionParser::ParseError
   exit 1
 end
 
-proto_file = ARGV.shift
-
-unless proto_file
+unless ARGV.size > 0
   puts opts
   exit
 end
 
-Protobuf::Compiler.compile(proto_file, options[:proto_path], options[:out])
+ARGV.each do |proto_file|
+  Protobuf::Compiler.compile(proto_file, options[:proto_path], options[:out])
+end
