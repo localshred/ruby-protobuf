@@ -8,7 +8,6 @@ require 'ruby_protobuf'
 
 Hoe.spec('ruby_protobuf') do
   self.version = RubyProtobuf::VERSION
-  self.rubyforge_name = 'ruby-protobuf'
   self.developer('BJ Neilsen', 'bj.neilsen@gmail.com')
   self.summary = 'Protocol Buffers for Ruby'
   self.description = 'Ruby implementation for Protocol Buffers. Works with other rpc implementations.'

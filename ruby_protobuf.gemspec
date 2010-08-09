@@ -12,7 +12,7 @@ Gem::Specification.new do |s|
   s.email = ["bj.neilsen@gmail.com"]
   s.executables = ["rprotoc"]
   s.extra_rdoc_files = ["History.txt", "README.txt"]
-  s.files = Dir.glob('lib/**/*.rb') + ["History.txt", "README.txt", "Rakefile", "TODO", "bin/rprotoc"]
+  s.files = Dir.glob('lib/**/*.{erb,rb,y,ebnf,proto}') + ["History.txt", "README.txt", "Rakefile", "TODO", "bin/rprotoc"]
   s.homepage = %q{http://github.com/localshred/ruby-protobuf}
   s.rdoc_options = ["--main", "README.txt"]
   s.require_paths = ["lib"]
