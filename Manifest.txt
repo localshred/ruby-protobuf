@@ -8,7 +8,6 @@ examples/addressbook.pb.rb
 examples/addressbook.proto
 examples/reading_a_message.rb
 examples/writing_a_message.rb
-lib/ruby_protobuf.rb
 lib/protobuf/common/exceptions.rb
 lib/protobuf/common/util.rb
 lib/protobuf/common/wire_type.rb
@@ -43,8 +42,10 @@ lib/protobuf/rpc/rpc.pb.rb
 lib/protobuf/rpc/server.rb
 lib/protobuf/rpc/service.rb
 lib/protobuf/rpc/stub.rb
+lib/ruby_protobuf.rb
 lib/utils/word_utils.rb
 proto/rpc.proto
+ruby-protobuf.gemspec
 script/mk_parser
 test/check_unbuild.rb
 test/data/data.bin
@@ -92,3 +93,4 @@ test/test_repeated_types.rb
 test/test_serialize.rb
 test/test_standard_message.rb
 test/test_types.rb
+web1

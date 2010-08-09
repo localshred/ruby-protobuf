@@ -36,6 +36,11 @@ unless ARGV.size > 0
   exit
 end
 
-ARGV.each do |proto_file|
-  Protobuf::Compiler.compile(proto_file, options[:proto_path], options[:out])
+begin
+  ARGV.each do |proto_file|
+    Protobuf::Compiler.compile(proto_file, options[:proto_path], options[:out])
+  end
+rescue
+  puts $!.message
+  exit 1
 end

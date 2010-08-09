@@ -98,25 +98,24 @@ module Protobuf
       end
 
       def required_message_from_proto(proto_file)
-        
         # Need to go get the package directive from the proto file
         # to accurately give the require path
         # This is super tedious... but not sure what else to do at this point
-        module_path = nil
-        File.open(@proto_dir+"/"+proto_file) do |file|
-          while (line = file.gets)
-            if line =~ /^\s*package ([a-z_.]+);/i
-              module_path = WordUtils.package_to_path($1)
-              break
-            end
-          end
-        end
+        # module_path = nil
+        # File.open(@proto_dir+"/"+proto_file) do |file|
+        #   while (line = file.gets)
+        #     if line =~ /^\s*package ([a-z0-9_.]+);/i
+        #       module_path = WordUtils.package_to_path($1)
+        #       break
+        #     end
+        #   end
+        # end
         
         rb_path = [
-          @out_dir,
-          module_path,
+          # @out_dir,
+          # module_path,
           proto_file.sub(/\.proto\z/, '.pb.rb')
-        ].join('/')
+        ].join('/').gsub(/\/{2,}/, '/')
         
         unless File.exist?(rb_path)
           Compiler.compile(proto_file, @proto_dir, @out_dir)
@@ -126,10 +125,15 @@ module Protobuf
       end
 
       def create_files(filename, out_dir, file_create)
-        old_lp = $:
-        $: << File.expand_path(out_dir)
-        Class.new.class_eval(to_s) # check the message
-        $:.delete File.expand_path(out_dir)
+        begin
+          $: << File.expand_path(out_dir)
+          Class.new.class_eval(to_s) # check the message
+          $:.delete File.expand_path(out_dir)
+        rescue LoadError
+          puts "Error creating file #{filename}"
+          puts $!.message
+          exit 1
+        end
         
         file = File.basename(filename)
         message_module = WordUtils.module_to_path(package.map{|p| p.to_s.capitalize}.join('::'))
@@ -170,10 +174,10 @@ module Protobuf
           underscored_name = underscore service_name.to_s
           message_module = package.map{|p| p.to_s.capitalize}.join('::')
           required_file = [
-            out_dir,
+            # out_dir,
             WordUtils.module_to_path(message_module),
             File.basename(message_file.sub(/^\.\//, '').sub(/\.rb$/, ''))
-          ].join('/')
+          ].join('/').gsub(/\/{2,}/, '/')
 
           # TODO: removed bin creation
           # create_bin(out_dir, underscored_name, message_module, service_name, default_port)
