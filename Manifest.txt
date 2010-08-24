@@ -45,7 +45,7 @@ lib/protobuf/rpc/stub.rb
 lib/ruby_protobuf.rb
 lib/utils/word_utils.rb
 proto/rpc.proto
-ruby-protobuf.gemspec
+ruby_protobuf.gemspec
 script/mk_parser
 test/check_unbuild.rb
 test/data/data.bin
@@ -93,4 +93,3 @@ test/test_repeated_types.rb
 test/test_serialize.rb
 test/test_standard_message.rb
 test/test_types.rb
-web1

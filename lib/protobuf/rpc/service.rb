@@ -73,7 +73,6 @@ module Protobuf
           end
     
           def service_method(method, &block)
-            # puts '-----'
             self.service_blocks[method] = ServiceMethodBlock.new(method, block)
           end
     
