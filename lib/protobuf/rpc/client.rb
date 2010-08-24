@@ -1,3 +1,5 @@
+require 'protobuf/rpc/channel'
+
 module Protobuf
   module Rpc
     class Client
