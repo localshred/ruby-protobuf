@@ -12,8 +12,8 @@ module Protobuf
         @stub = @klass.client_stub(@channel)
       end
       
-      def method_missing method, *params
-        @stub.__send__(method, *params)
+      def method_missing method, *params, &block
+        @stub.__send__(method, *params, &block)
       end
       
     end
