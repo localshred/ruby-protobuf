@@ -10,22 +10,23 @@ require '<%= required_file %>'
 ##	To implement this service as defined by the protobuf, simply
 ##	reopen <%= module_name %>::<%= service_name %> and implement each service method:
 ## 
-##<%- module_array.each_with_index do |m, i| -%>
-##<%= "#{"\t"*i}module #{m}" %>
-##<%- end -%>
-##<%= class_indent %>class <%= service_name %>
-##<%- rpcs.each do |name, request, response| -%>
-##<%= class_indent %>	# request -> <%= module_name %>::<%= request %>
-##<%= class_indent %>	# response -> <%= module_name %>::<%= response %>
-##<%= class_indent %>	def <%= underscore name %>
-##<%= class_indent %>	def <%= underscore name %>
-##<%= class_indent %>		# TODO: implement <%= underscore name %>
-##<%= class_indent %>	end
-##<%- end -%>
-##<%= class_indent %>end
-##<%- (module_array.size-1).downto(0) do |i| -%>
-##<%= "#{"\t"*i}end" %>
-##<%- end -%>
+<%- module_array.each_with_index do |m, i| -%>
+## <%= "#{"\t"*i}module #{m}" %>
+<%- end -%>
+## <%= class_indent %>class <%= service_name %>
+## <%= class_indent %>
+<%- rpcs.each do |name, request, response| -%>
+## <%= class_indent %>	# request -> <%= module_name %>::<%= request %>
+## <%= class_indent %>	# response -> <%= module_name %>::<%= response %>
+## <%= class_indent %>	def <%= underscore name %>
+## <%= class_indent %>		# TODO: implement <%= underscore name %>
+## <%= class_indent %>	end
+## <%= class_indent %>
+<%- end -%>
+## <%= class_indent %>end
+<%- (module_array.size-1).downto(0) do |i| -%>
+## <%= "#{"\t"*i}end" %>
+<%- end -%>
 ##
 
 <%- module_array.each_with_index do |m, i| -%>

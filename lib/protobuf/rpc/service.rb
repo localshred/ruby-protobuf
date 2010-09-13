@@ -46,6 +46,10 @@ module Protobuf
 					end
 				end
 			
+				def client_stub(channel)
+					Stub.new(channel, self.name, rpcs[self].keys)
+				end
+			
 			end
 			
 			# If a method comes through that hasn't been found, and it
