@@ -37,6 +37,7 @@ lib/protobuf/message/message.rb
 lib/protobuf/message/protoable.rb
 lib/protobuf/message/service.rb
 lib/protobuf/rpc/channel.rb
+lib/protobuf/rpc/client.rb
 lib/protobuf/rpc/controller.rb
 lib/protobuf/rpc/rpc.pb.rb
 lib/protobuf/rpc/server.rb
