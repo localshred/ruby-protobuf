@@ -6,56 +6,103 @@ module Protobuf
   module Rpc
     class Channel
       
+      attr_reader :controller
+      
       def initialize(host='localhost', port=7575)
         @host, @port = host, port
+        @controller = Protobuf::Rpc::Controller.new
       end
       
-      def controller
-        @controller ||= Protobuf::Rpc::Controller.new
-      end
-      
-      def call(service_name, method_name, client_request, client_response, &block)
-        # Setup the params we'll need in the block call
-        parsed_response = nil
-        controller.response = Protobuf::Socketrpc::Response.new
+      def call(service_name, method_name, client_request, client_response, &callback)
+        # Open the socket connection
+        open_socket
         
-        # Create the socket
-        socket = TCPSocket.open(@host, @port)
+        # Setup the request
+        setup_request service_name, method_name, client_request
         
-        # puts "channel -> #{service_name}, #{method_name}, #{client_request}, #{client_response}"
+        # Call the server with the request, reading its response
+        write_request_and_read_response
         
-        # Plug data into the request wrapper object
-        request = Protobuf::Socketrpc::Request.new
-        request.service_name = service_name
-        request.method_name = method_name
-        request.request_proto = client_request.serialize_to_string
+        # Parse the response from the controller
+        parsed_response = deserialize_response client_response
         
-        # Write the request and close the socket's write session
-        request.serialize_to(socket)
-        socket.close_write
+      rescue => error
         
-        # Parse the socket for a response wrapper
-        controller.response.parse_from(socket)
-        
-        # Create a new instance of the client's response, passing the wrapper's data to it
-        client_response = client_response.new() if (client_response.is_a? Class)
-        parsed_response = client_response.parse_from_string(controller.response.response_proto.to_s)
-      rescue SocketError => e
-        controller.response.error_reason = Protobuf::Socketrpc::ErrorReason::IO_ERROR
-        controller.response.error = "#{e.message} (#{e.class.name})"
-      rescue => e
-        # TODO: probably do some controller error handling here
-        controller.response.error_reason = Protobuf::Socketrpc::ErrorReason::RPC_ERROR
-        controller.response.error = "#{e.message} (#{e.class.name})"
-      ensure
-        # Call the given block, otherwise fall through
-        if (parsed_response.nil? && !controller.failed?)
-          controller.response.error_reason = Protobuf::Socketrpc::ErrorReason::RPC_ERROR
-          controller.response.error = 'An unkown error has occurred'
+        unless error.is_a? RpcError
+          @controller.response.error = error.message
+          @controller.response.error_reason = Protobuf::Socketrpc::ErrorReason::RPC_ERROR
+        else
+          error.to_response @controller.response
         end
-        block.call(controller, parsed_response) if block_given?
+        
+      ensure
+        
+        if block_given?
+          block.call @controller, parsed_response
+        end
+        
       end
       
     end
+    
+    private
+    
+    def open_socket
+      @socket = TCPSocket.open @host, @port
+    rescue
+      if $!.message =~ /getaddrinfo/
+        raise UnknownHost, 'Nothing known about host %s' % @host
+      else
+        raise IOError, 'An unknown IO Error occurred while connecting to %s:%s : %s' % [@host, @port, $!.message]
+      end
+    end
+    
+    def setup_request service, method, client_request
+      # Plug data into the request wrapper object
+      @request = Protobuf::Socketrpc::Request.new
+      @request.service_name = service_name
+      @request.method_name = method_name
+      
+      # Verify the request type
+      service_const = WordUtils.constantize(service_name)
+      expected_request_type = service_const.rpcs[method_name.to_sym].request_type
+      if client_request.class == expected_request_type
+        @request.request_proto = client_request.serialize_to_string
+      else
+        raise InvalidRequestProto, 'Expected request type to be type of %s' % expected_request_type.to_s
+      end
+    end
+    
+    def write_request_and_read_response
+      # Write the request and close the socket's write session
+      @request.serialize_to @socket
+      @socket.close_write
+    
+      # Parse the socket for a response wrapper
+      @controller.response.parse_from @socket
+    rescue
+      raise IOError, $!.message
+    end
+    
+    # Pull the response out of the controller and populate the expected response type
+    def deserialize_response client_response
+      # Initialize the response for this request
+      @controller.response = Protobuf::Socketrpc::Response.new
+      
+      # Ensure client_response is an instance
+      client_response = client_response.new if client_response.instance_of? Class
+      
+      # 
+      parsed = client_response.parse_from_string @controller.response.response_proto.to_s
+      
+      if parsed.nil? && !@controller.failed?
+        raise RpcError, 'Unable to parse response from socket' 
+      else
+        parsed
+      end
+    rescue
+      raise BadResponseData, 'Unable to parse the response from the controller: %s' % $!.message
+    end
+    
   end
 end

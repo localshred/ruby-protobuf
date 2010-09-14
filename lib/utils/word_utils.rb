@@ -48,4 +48,9 @@ module WordUtils
     str.split('.').map{|e| camelize(e) }.join('::')
   end
   
+  def self.constantize(klass)
+    constants = moduleize(klass).split('::')
+    constants.inject(Module.const_get(constants.shift)) {|const, obj| const.const_get(obj) }
+  end
+  
 end

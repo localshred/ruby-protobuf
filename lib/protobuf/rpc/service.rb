@@ -1,9 +1,9 @@
 require 'protobuf/rpc/stub'
+require 'protobuf/rpc/error'
 
 module Protobuf
 	module Rpc
 		
-		class NoRpcMethodError < NoMethodError; end
 		RpcMethod = Struct.new "RpcMethod", :klass, :method, :request_type, :response_type
 		
 		class Service
@@ -58,12 +58,22 @@ module Protobuf
 			# functionality, so throw an appropriate error, otherwise go to super
 			def method_missing method, *params
 				if rpcs.key? method
-					raise NoRpcMethodError, "#{self}##{method} was defined as a valid rpc method, but was not implemented."
+					raise MethodNotFound, "#{self}##{method} was defined as a valid rpc method, but was not implemented."
 				else
 					super method, args
 				end
 			end
 			
+			# Convenience method for automatically failing a service method
+			def rpc_failed message="RPC Failed while executing service method #{@method}"
+			  raise RpcFailed, message
+		  end
+			
+			# Convenience wrapper around the rpc method list for a given class
+			def rpcs
+				self.class.rpcs[self.class]
+			end
+	
 			private
 			
 			# Call the rpc method that was previously privatized.
@@ -77,26 +87,31 @@ module Protobuf
 			# as there is no way to reliably determine the response like
 			# a normal (http-based) controller method would be able to
 			def call_rpc method, old_method, *args, &server
-				# Setup the request
-				pb_request = args[0]
-				@request = rpcs[old_method.to_sym].request_type.new
-				@request.parse_from_string pb_request.request_proto
+			  @method = old_method
+			  
+			  begin
+  				# Setup the request
+  				pb_request = args[0]
+  				@request = rpcs[old_method.to_sym].request_type.new
+  				@request.parse_from_string pb_request.request_proto
+				rescue
+				  raise BadRequestProto, 'Unable to parse request: %s' % $!.message
+			  end
 				
-				# Setup the response
-				@response = rpcs[old_method.to_sym].response_type.new
+  			# Setup the response
+  			@response = rpcs[old_method.to_sym].response_type.new
+
+				begin
+  				# Call the rpc method
+  				__send__ method, *args
 				
-				# Call the rpc method
-				__send__ method, *args
-				
-				# Pass the populated response back to the server
-				server.call @response
+  				# Pass the populated response back to the server
+  				server.call @response
+				rescue
+				  raise RpcError, 'An error occurred while calling the service method:  %s' % $!.message
+			  end
 			end
 			
-			# Convenience wrapper around the rpc method list for a given class
-			def rpcs
-				self.class.rpcs[self.class]
-			end
-	
 		end
 		
 	end
