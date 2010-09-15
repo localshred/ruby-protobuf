@@ -1,3 +1,4 @@
+Gemfile
 History.txt
 Manifest.txt
 README.txt
@@ -36,13 +37,14 @@ lib/protobuf/message/field.rb
 lib/protobuf/message/message.rb
 lib/protobuf/message/protoable.rb
 lib/protobuf/message/service.rb
-lib/protobuf/rpc/channel.rb
 lib/protobuf/rpc/client.rb
-lib/protobuf/rpc/controller.rb
+lib/protobuf/rpc/client_connection.rb
+lib/protobuf/rpc/error.rb
+lib/protobuf/rpc/error/client_error.rb
+lib/protobuf/rpc/error/server_error.rb
 lib/protobuf/rpc/rpc.pb.rb
 lib/protobuf/rpc/server.rb
 lib/protobuf/rpc/service.rb
-lib/protobuf/rpc/stub.rb
 lib/ruby_protobuf.rb
 lib/utils/word_utils.rb
 proto/rpc.proto
