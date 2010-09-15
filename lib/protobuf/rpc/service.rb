@@ -4,7 +4,7 @@ require 'protobuf/rpc/error'
 module Protobuf
 	module Rpc
 		
-		RpcMethod = Struct.new "RpcMethod", :klass, :method, :request_type, :response_type
+		RpcMethod = Struct.new "RpcMethod", :service, :method, :request_type, :response_type
 		
 		class Service
 		
@@ -13,21 +13,9 @@ module Protobuf
 			
 			class << self
 				
-				# You MUST add the method name to this list if you are 
-				# adding class methods here, otherwise stuff will probably break
-				NON_RPC_METHODS = %w( rpcs call_rpc request response method_missing )
-				
-				# Shorthand for @rpcs class instance var
-				def rpcs
-					@rpcs ||= {}
-				end
-				
-				# Generated service classes should call this method on themselves to add rpc methods
-				# to the stack with a given request and response type
-				def rpc method, request_type, response_type
-					rpcs[self] ||= {}
-					rpcs[self][method] = RpcMethod.new(self, method, request_type, response_type)
-				end
+				# You MUST add the method name to this list if you are adding
+				# instance methods below, otherwise stuff will definitely break
+				NON_RPC_METHODS = %w( rpcs call_rpc rpc_failed request response method_missing )
 				
 				# Override methods being added to the class
 				# If the method isn't already a private instance method, or it doesn't start with rpc_, 
@@ -46,10 +34,53 @@ module Protobuf
 					end
 				end
 			
-				def client_stub(channel)
-					Stub.new(channel, self.name, rpcs[self].keys)
+				# Generated service classes should call this method on themselves to add rpc methods
+				# to the stack with a given request and response type
+				def rpc method, request_type, response_type
+					rpcs[self] ||= {}
+					rpcs[self][method] = RpcMethod.new(self, method, request_type, response_type)
 				end
+
+				# Shorthand for @rpcs class instance var
+				def rpcs
+					@rpcs ||= {}
+				end
+				
+				# Create a new client for the given service
+				def client
+					Client.new(self, host: locations[self][:host], port: locations[self][:port])
+				end
+        
+        # Allows service-level configuration of location
+        def configure config
+          locations[self] ||= {}
+          locations[self][:host] = config[:host] if config.key? :host
+          locations[self][:port] = config[:port] if config.key? :port
+        end
+        
+        # Shorthand call to configure, passing a string formatted as hostname:port
+        # e.g. 127.0.0.1:9933
+        # e.g. localhost:0
+        def located_at location
+          host, port = location.split ':'
+          configure host: host, port: port.to_i
+        end
+        
+        def host
+          configure
+          locations[self][:host] || 'localhost'
+        end
+        
+        def port
+          configure
+          locations[self][:port] || 9939
+        end
 			
+				# Shorthand for @locations class instance var
+				def locations
+					@locations ||= {}
+				end
+				
 			end
 			
 			# If a method comes through that hasn't been found, and it
@@ -74,7 +105,7 @@ module Protobuf
 				self.class.rpcs[self.class]
 			end
 	
-			private
+		private
 			
 			# Call the rpc method that was previously privatized.
 			# call_rpc allows us to wrap the normal method call with 
