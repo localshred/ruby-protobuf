@@ -12,39 +12,33 @@ module Protobuf
       
       def post_init
         @buffer = ''
-        @logger ||= Logger.new(STDOUT)
-        @logger.level = Logger::DEBUG
-        @logger.info '[S] post_init'
       end
       
       def receive_data data
-        @logger.info '[S] got data'
         @buffer << data
         handle_client if @buffer =~ /^.+?\r?\n?/
       end
       
       def handle_client
-        @logger.info '[S] handling client'
         # Setup the initial request and response
         @request = Protobuf::Socketrpc::Request.new
         @response = Protobuf::Socketrpc::Response.new
         
         # Parse the protobuf request from the socket
         begin
-          @request.parse_from @buffer.chomp
+          @request.parse_from_string @buffer.chomp
         rescue
           raise BadRequestData, 'Unable to parse request: %s' % $!.message
         end
       
         # Determine the service class and method name from the request
         service, method = parse_service_info
-        @logger.info 'Found from request: %s:%s' % [service.name, method.to_s]
         
         # Call the service method
         # Read out the response from the service method,
         # setting it on the pb request, and serializing the whole 
         # response to the socket
-        service.__send__ method, @request do |client_response|
+        service.new.__send__ method, @request do |client_response|
           @response.response_proto = client_response.serialize_to_string
         end
       rescue => error
@@ -63,13 +57,13 @@ module Protobuf
       def parse_service_info
         service, method = nil, nil
         begin
-          service = WordUtils.constantize request.service_name
+          service = WordUtils.constantize @request.service_name
         rescue
           raise ServiceNotFound, "Service class #{request.service_name} does not exist"
         end
         
         begin
-          method = WordUtils.underscore(request.method_name).to_sym
+          method = WordUtils.underscore(@request.method_name).to_sym
         rescue
           raise MethodNotFound, "Service method #{request.method_name} does not exist"
         end

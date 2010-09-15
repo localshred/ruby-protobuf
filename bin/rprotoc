@@ -41,6 +41,6 @@ begin
     Protobuf::Compiler.compile(proto_file, options[:proto_path], options[:out])
   end
 rescue
-  puts $!.message
+  $stderr.puts $!.message
   exit 1
 end

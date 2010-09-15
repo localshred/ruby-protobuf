@@ -1,4 +1,5 @@
 require 'eventmachine'
+require 'protobuf/rpc/error'
 
 # Handles client connections to the server
 module Protobuf
@@ -17,12 +18,12 @@ module Protobuf
         @buffer << data
         if @buffer =~ /^.+?\r?\n?/
           parse_response
-          close_connection
+          # close_connection
         end
       end
 
       def parse_response
-        client.response.parse_from @buffer.chomp
+        client.response.parse_from_string @buffer.chomp
         
         # Ensure client_response is an instance
         response_type = client.rpc.response_type.new
@@ -30,15 +31,14 @@ module Protobuf
         # 
         parsed = response_type.parse_from_string client.response.response_proto.to_s
       
-        if parsed.nil? && !@controller.failed?
+        if parsed.nil? && !@client.failed?
           raise RpcError, 'Unable to parse response from socket' 
         else
           succeed parsed
         end
       rescue
-        failed 'It failed'
-        unless $!.class == RpcError
-          raise BadResponseData, 'Unable to parse the response from the controller: %s' % $!.message
+        unless $!.class == Protobuf::Rpc::RpcError
+          raise Protobuf::Rpc::BadResponseProto, 'Unable to parse the response from the server: %s' % $!.message
         end
       end
   

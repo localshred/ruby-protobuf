@@ -1,4 +1,4 @@
-require 'protobuf/rpc/stub'
+require 'protobuf/rpc/client'
 require 'protobuf/rpc/error'
 
 module Protobuf
@@ -38,7 +38,7 @@ module Protobuf
 				# to the stack with a given request and response type
 				def rpc method, request_type, response_type
 					rpcs[self] ||= {}
-					rpcs[self][method] = RpcMethod.new(self, method, request_type, response_type)
+					rpcs[self][method] = RpcMethod.new self, method, request_type, response_type
 				end
 
 				# Shorthand for @rpcs class instance var
@@ -48,11 +48,11 @@ module Protobuf
 				
 				# Create a new client for the given service
 				def client
-					Client.new(self, host: locations[self][:host], port: locations[self][:port])
+					Client.new self, host: locations[self][:host], port: locations[self][:port]
 				end
         
         # Allows service-level configuration of location
-        def configure config
+        def configure config={}
           locations[self] ||= {}
           locations[self][:host] = config[:host] if config.key? :host
           locations[self][:port] = config[:port] if config.key? :port
@@ -133,13 +133,13 @@ module Protobuf
   			@response = rpcs[old_method.to_sym].response_type.new
 
 				begin
-  				# Call the rpc method
-  				__send__ method, *args
+   				# Call the rpc method
+  				__send__ method
 				
   				# Pass the populated response back to the server
   				server.call @response
 				rescue
-				  raise RpcError, 'An error occurred while calling the service method:  %s' % $!.message
+				  raise RpcError, 'Unable to call service method %s: %s' % [@method, $!.message]
 			  end
 			end
 			

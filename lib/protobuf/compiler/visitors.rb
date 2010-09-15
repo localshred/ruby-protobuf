@@ -27,8 +27,8 @@ module Protobuf
         FileUtils.chmod(0755, filename) if executable
       end
 
-      def log_writing(filename, message="writing...")
-        puts "#{filename} #{message}" unless silent
+      def log_writing(filename, message="wrote")
+        puts "#{message} #{filename}" unless silent
       end
     end
 
