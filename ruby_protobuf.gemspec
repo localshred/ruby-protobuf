@@ -30,13 +30,15 @@ Gem::Specification.new do |s|
     if Gem::Version.new(Gem::RubyGemsVersion) >= Gem::Version.new('1.2.0') then
       s.add_development_dependency(%q<rubyforge>, [">= 2.0.3"])
       s.add_development_dependency(%q<hoe>, [">= 2.6.0"])
+      s.add_development_dependency('eventmachine', ['~> 0.12.10'])
     else
       s.add_dependency(%q<rubyforge>, [">= 2.0.3"])
       s.add_dependency(%q<hoe>, [">= 2.6.0"])
+      s.add_dependency('eventmachine', ['~> 0.12.10'])
     end
   else
     s.add_dependency(%q<rubyforge>, [">= 2.0.3"])
     s.add_dependency(%q<hoe>, [">= 2.6.0"])
+    s.add_dependency('eventmachine', ['~> 0.12.10'])
   end
-  s.add_dependency('eventmachine')
 end
