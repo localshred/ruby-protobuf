@@ -1,8 +1,11 @@
 # -*- encoding: utf-8 -*-
 
+$:.push(File.dirname(__FILE__) + '/lib')
+require 'ruby_protobuf'
+
 Gem::Specification.new do |s|
   s.name = %q{ruby_protobuf}
-  s.version = "0.4.0.2"
+  s.version = RubyProtobuf::VERSION
 
   s.required_rubygems_version = Gem::Requirement.new(">= 0") if s.respond_to? :required_rubygems_version=
   s.authors = ["BJ Neilsen"]
