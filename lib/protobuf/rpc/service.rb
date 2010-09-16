@@ -47,8 +47,10 @@ module Protobuf
 				end
 				
 				# Create a new client for the given service
-				def client
-					Client.new self, host: locations[self][:host], port: locations[self][:port]
+				# Allows you to pass in the given host and port, otherwise
+				# introspects on self to get a pre-configured host and port
+				def client host=nil, port=nil
+					Client.new self, host: host || locations[self][:host], port: port || locations[self][:port]
 				end
         
         # Allows service-level configuration of location
