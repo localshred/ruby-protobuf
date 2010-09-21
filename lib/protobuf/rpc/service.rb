@@ -8,8 +8,9 @@ module Protobuf
 		
 		class Service
 		
-			attr_reader :request, :response
-			private :request, :response
+			attr_reader :request
+			attr_accessor :response
+			private :request, :response, :response=
 			
 			class << self
 				

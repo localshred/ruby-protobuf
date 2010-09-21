@@ -361,5 +361,9 @@ module Protobuf
         yield(field, value)
       end
     end
+    
+    def to_json
+      @values.to_json
+    end
   end
 end
