@@ -11,7 +11,7 @@ module Protobuf
     autoload :RpcFailed, 'protobuf/rpc/error/server_error'
     
     autoload :InvalidRequestProto, 'protobuf/rpc/error/client_error'
-    autoload :BadRequestProto, 'protobuf/rpc/error/client_error'
+    autoload :BadResponseProto, 'protobuf/rpc/error/client_error'
     autoload :UnknownHost, 'protobuf/rpc/error/client_error'
     autoload :IOError, 'protobuf/rpc/error/client_error'
     
