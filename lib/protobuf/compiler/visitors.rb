@@ -39,7 +39,7 @@ module Protobuf
         @proto_dir, @out_dir = proto_dir, out_dir
         @indent = 0
         @context = []
-        @attach_proto = true
+        @attach_proto = false
         @proto_file = proto_file
       end
 
