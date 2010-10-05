@@ -142,7 +142,11 @@ module Protobuf
   				# Pass the populated response back to the server
   				server.call @response
 				rescue
-				  raise RpcError, 'Unable to call service method %s: %s' % [@method, $!.message]
+          unless error.is_a? PbError
+  				  raise RpcError, '[%s] %s' % [$!.class.name, $!.message]
+          else
+            raise
+          end
 			  end
 			end
 			
