@@ -142,8 +142,8 @@ module Protobuf
   				# Pass the populated response back to the server
   				server.call @response
 				rescue
-          unless error.is_a? PbError
-  				  raise RpcError, '[%s] %s' % [$!.class.name, $!.message]
+          unless $!.is_a? PbError
+  				  raise RpcError, '%s (%s)' % [$!.message, $!.class.name]
           else
             raise
           end

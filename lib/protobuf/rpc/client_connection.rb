@@ -18,7 +18,6 @@ module Protobuf
         @buffer << data
         if @buffer =~ /^.+?\r?\n?/
           parse_response
-          # close_connection
         end
       end
 
@@ -28,7 +27,6 @@ module Protobuf
         # Ensure client_response is an instance
         response_type = client.rpc.response_type.new
         
-        # 
         parsed = response_type.parse_from_string client.response.response_proto.to_s
       
         if parsed.nil? && !@client.failed?
@@ -37,7 +35,7 @@ module Protobuf
           succeed parsed
         end
       rescue
-        unless $!.class == Protobuf::Rpc::RpcError
+        unless $!.is_a? Protobuf::Rpc::PbError
           raise Protobuf::Rpc::BadResponseProto, 'Unable to parse the response from the server: %s' % $!.message
         end
       end

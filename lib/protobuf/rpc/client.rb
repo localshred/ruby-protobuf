@@ -43,7 +43,7 @@ module Protobuf
       end
       
       def error_message
-        "Response Error [%s]: %s" % [error_reason, error] if failed?
+        "%s: %s" % [error_reason, error] if failed?
       end
    
     private
