@@ -37,6 +37,8 @@ module Protobuf
       rescue
         unless $!.is_a? Protobuf::Rpc::PbError
           raise Protobuf::Rpc::BadResponseProto, 'Unable to parse the response from the server: %s' % $!.message
+        else
+          raise
         end
       end
   
