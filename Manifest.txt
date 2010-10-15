@@ -37,6 +37,7 @@ lib/protobuf/message/field.rb
 lib/protobuf/message/message.rb
 lib/protobuf/message/protoable.rb
 lib/protobuf/message/service.rb
+lib/protobuf/rpc/buffer.rb
 lib/protobuf/rpc/client.rb
 lib/protobuf/rpc/client_connection.rb
 lib/protobuf/rpc/error.rb
