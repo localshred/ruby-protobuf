@@ -56,7 +56,7 @@ module Protobuf
     
       def get_data_size
         if @size.nil?
-          sliced_size = @buffer.slice! /^\d+-/
+          sliced_size = @data.slice! /^\d+-/
           unless sliced_size.nil?
             @size = sliced_size.gsub(/-/, '').to_i 
           end
