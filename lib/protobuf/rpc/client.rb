@@ -1,5 +1,6 @@
 require 'protobuf/rpc/rpc.pb'
 require 'protobuf/rpc/client_connection'
+require 'protobuf/rpc/buffer'
 require 'protobuf/rpc/error'
 
 module Protobuf
@@ -99,7 +100,8 @@ module Protobuf
           end
           
           # Write the data to the connection, depend on event handing to parse/invoke response
-          @connection.send_data @request.serialize_to_string.chomp + "\n"
+          request_buffer = Protobuf::Rpc::Buffer.new :write, @request
+          @connection.send_data request_buffer.write
           
         }
       end

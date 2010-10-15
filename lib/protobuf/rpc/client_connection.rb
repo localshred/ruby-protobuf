@@ -1,4 +1,5 @@
 require 'eventmachine'
+require 'protobuf/rpc/buffer'
 require 'protobuf/rpc/error'
 
 # Handles client connections to the server
@@ -10,19 +11,17 @@ module Protobuf
       attr_accessor :client
 
       def post_init
-        @buffer = ''
+        @buffer = Protobuf::Rpc::Buffer.new :read
         timeout 30
       end
 
       def receive_data data
         @buffer << data
-        if @buffer =~ /^.+?\r?\n?/
-          parse_response
-        end
+        parse_response if @buffer.flushed?
       end
 
       def parse_response
-        client.response.parse_from_string @buffer.chomp
+        client.response.parse_from_string @buffer.data
         
         # Ensure client_response is an instance
         response_type = client.rpc.response_type.new

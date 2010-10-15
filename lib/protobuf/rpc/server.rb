@@ -1,6 +1,7 @@
 require 'eventmachine'
-require 'protobuf/rpc/error'
 require 'protobuf/rpc/rpc.pb'
+require 'protobuf/rpc/buffer'
+require 'protobuf/rpc/error'
 require 'utils/word_utils'
 
 module Protobuf
@@ -11,12 +12,12 @@ module Protobuf
       attr_accessor :logger
       
       def post_init
-        @buffer = ''
+        @buffer = Protobuf::Rpc::Buffer.new :read
       end
       
       def receive_data data
         @buffer << data
-        handle_client if @buffer =~ /^.+?\r?\n?/
+        handle_client if @buffer.flushed?
       end
       
       def handle_client
@@ -26,7 +27,7 @@ module Protobuf
         
         # Parse the protobuf request from the socket
         begin
-          @request.parse_from_string @buffer.chomp
+          @request.parse_from_string @buffer.data
         rescue
           raise BadRequestData, 'Unable to parse request: %s' % $!.message
         end
@@ -49,7 +50,8 @@ module Protobuf
           error.to_response @response
         end
       ensure
-        send_data @response.serialize_to_string + "\n"
+        response_buffer = Protobuf::Rpc::Buffer.new :write, @response
+        send_data response_buffer.write
       end
       
       private
