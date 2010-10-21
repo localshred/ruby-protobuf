@@ -1,3 +1,4 @@
+require 'eventmachine'
 require 'protobuf/rpc/rpc.pb'
 require 'protobuf/rpc/client_connection'
 require 'protobuf/rpc/buffer'
@@ -5,107 +6,107 @@ require 'protobuf/rpc/error'
 
 module Protobuf
   module Rpc
-    
     class Client
       
-      attr_reader :service, :method, :host, :port, :request, :response, :rpc
+      # attr_reader :service, :method, :host, :port, :request, :response, :rpc
       
-      def initialize service, options={}
-        @service = service
-        @host = options[:host] || @service.host || 'localhost'
-        @port = options[:port] || @service.port || 9939
-        @request = Protobuf::Socketrpc::Request.new
-        @response = Protobuf::Socketrpc::Response.new
+      def initialize options={}
+        [:service, :method].each do |opt|
+          raise "Invalid client configuration. #{opt} must be a defined option." if !options[opt] || options[opt].nil?
+        end
+        @error = nil
+        @options = ClientConnection::DEFAULT_OPTIONS.merge(options)
+        @success_callback = nil
+        @failure_callback = nil
+      end
+      
+      def on_success &success_callback
+        @success_callback << success_callback
+      end
+      
+      def on_failure &failure_callback
+        @failure_callback << failure_callback
       end
       
       # Intercept calls to service rpcs
-      def method_missing method, *params, &block
-        unless @service.rpcs[@service].keys.include? method
+      def method_missing method, *params, &client_callback
+        service = @options[:service].name
+        unless service.rpcs[service].keys.include? method
           super method, *params
         else
-          @method = method
-          @client_request = params[0]
-          @client_callback = block
+          rpc = service.rpcs[service][method.to_sym]
+          @options[:request_type] = rpc.request_type
+          @options[:response_type] = rpc.response_type
+          @options[:method] = method.to_s
+          @options[:request] = params[0]
+          
+          # TODO remove once we are able to convert everything
+          # to the new event based way of handling success/failure
+          if client_callback.arity == 2
+            unless client_callback.nil?
+              on_success do |response|
+                client_callback.call self, response
+              end
+
+              on_failure do |error|
+                client_callback.call self, nil
+              end
+            end
+          else
+            ### REPLACE WITH THIS
+            client_callback.call self
+          end
+
           call_rpc
         end
       end
 
       # Controller error/failure methods
       def failed?
-        !@response.nil? && @response.has_field?(:error_reason)
+        !@error.nil? and !@error[:code].nil?
       end
       
       def error
-        @response.error if failed?
+        @error[:message] if failed?
       end
       
       def error_reason
-        Protobuf::Socketrpc::ErrorReason.name_by_value(@response.error_reason).to_s if failed?
+        Protobuf::Socketrpc::ErrorReason.name_by_value(@error[:code]).to_s if failed?
       end
       
       def error_message
         "%s: %s" % [error_reason, error] if failed?
       end
-   
+       
     private
       
       def call_rpc
-        @rpc = @service.rpcs[@service][@method.to_sym]
-
+        # TODO handle async
+        
         # Run the event loop (terminated by the connection &callback_ensure)
         EM.run {
           
-          # Setup the error handler
-          EM.error_handler {|error|
-            unless error.kind_of? PbError
-              @response.error = error.message
-              @response.error_reason = Protobuf::Socketrpc::ErrorReason::RPC_ERROR
-            else
-              error.to_response @response
-            end
-            @connection.close_connection # explicitly close the connection
-            @connection.fail # callback ensures em loop is stopped
-          }
+          server = ClientConnection.connect @options
           
-          # Connect to the service
-          @connection = EM.connect(@host, @port, ClientConnection) {|conn|
-            # Give the connection self
-            conn.client = self
+          # Response came back
+          server.on_success do |response|
+            # Invoke the callback
+            @success_callback.call(response) unless @success_callback.nil?
             
-            # Setup the callback
-            callback_ensure = proc { |response|
-              
-              # We should always call the client callback code if it was given
-              @client_callback.call(self, response)  unless @client_callback.nil?
-              
-              # Stop the event loop
-              EM.stop_event_loop
-            }
-            
-            # Bind the callback to the connection
-            conn.callback &callback_ensure
-            conn.errback &callback_ensure
-          }
-          
-          if @connection.error?
-            raise Protobuf::Rpc::IOError, 'Unable to connect to %s:%s' % [@host, @port]
+            # Close the connection, stop the loop
+            server.close_connection
+            stop_event_loop
           end
           
-          # Plug data into the request wrapper object
-          @request.service_name = @service.name
-          @request.method_name = @method.to_s
-    
-          # Verify the request type
-          if @client_request.class == @rpc.request_type
-            @request.request_proto = @client_request.serialize_to_string
-          else
-            raise InvalidRequestProto, 'Expected request type to be type of %s' % @rpc.request_type.to_s
+          # Error occurred
+          server.on_failure do |error|
+            # populate the error
+            @error[:error_reason] = error[:code]
+            @error[:error] = error[:message]
+            
+            # TODO pass the @error instead of "self"
+            @failure_callback.call(self) unless @failure_callback.nil?
           end
-          
-          # Write the data to the connection, depend on event handing to parse/invoke response
-          request_buffer = Protobuf::Rpc::Buffer.new :write, @request
-          @connection.send_data request_buffer.write
-          
         }
       end
       

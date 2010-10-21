@@ -48,10 +48,14 @@ module Protobuf
         end
         
         # Create a new client for the given service
-        # Allows you to pass in the given host and port, otherwise
-        # introspects on self to get a pre-configured host and port
-        def client host=nil, port=nil
-          Client.new self, :host => (host || locations[self][:host]), :port => (port || locations[self][:port])
+        # See client.rb for options available, though you will likely
+        # only be passing (if anything) a host, port, or the async setting
+        def client options={}
+          Client.call({
+            service: self,
+            :host => (options[:host] || locations[self][:host]),
+            :port => (options[:port] || locations[self][:port])
+          })
         end
         
         # Allows service-level configuration of location
