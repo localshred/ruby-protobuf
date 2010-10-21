@@ -21,17 +21,24 @@ module Protobuf
       end
 
       def parse_response
-        client.response.parse_from_string @buffer.data
+        @buffer.data.inspect
+        @client.response.parse_from_string @buffer.data
         
-        # Ensure client_response is an instance
-        response_type = client.rpc.response_type.new
+        unless @client.failed?
+          # Ensure client_response is an instance
+          response_type = client.rpc.response_type.new
         
-        parsed = response_type.parse_from_string client.response.response_proto.to_s
+          parsed = response_type.parse_from_string client.response.response_proto.to_s
       
-        if parsed.nil? && !@client.failed?
-          raise RpcError, 'Unable to parse response from socket' 
+          if parsed.nil? && !@client.failed?
+            raise RpcError, 'Unable to parse response from server' 
+          else
+            succeed parsed
+          end
         else
-          succeed parsed
+          # fail the call if we already know the client is failed
+          # (don't try to parse out the response payload)
+          fail nil
         end
       rescue
         unless $!.is_a? Protobuf::Rpc::PbError

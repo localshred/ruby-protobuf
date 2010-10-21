@@ -9,7 +9,9 @@ module Protobuf
 
     # Encode +message+ and write to +stream+.
     def encode(stream, message)
-      raise NotInitializedError unless message.initialized?
+      # FIXME make this not as ghetto
+      raise NotInitializedError, "Message %s is not initialized (one or more fields is improperly set): %s" % [message.class.name, JSON.parse(message.to_json)] unless message.initialized?
+      
       message.each_field do |field, value|
         next unless message.has_field?(field.name)
 

@@ -63,6 +63,7 @@ module Protobuf
             else
               error.to_response @response
             end
+            @connection.close_connection # explicitly close the connection
             @connection.fail # callback ensures em loop is stopped
           }
           
@@ -73,8 +74,10 @@ module Protobuf
             
             # Setup the callback
             callback_ensure = proc { |response|
+              
               # We should always call the client callback code if it was given
-              @client_callback.call self, response unless @client_callback.nil?
+              @client_callback.call(self, response)  unless @client_callback.nil?
+              
               # Stop the event loop
               EM.stop_event_loop
             }
