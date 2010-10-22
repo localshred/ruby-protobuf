@@ -82,30 +82,27 @@ require 'protobuf/message/extend'
 module Protobuf
   module Socketrpc
     class Request < ::Protobuf::Message
-      defined_in __FILE__
       required :string, :service_name, 1
       required :string, :method_name, 2
       required :bytes, :request_proto, 3
     end
     class Response < ::Protobuf::Message
-      defined_in __FILE__
       optional :bytes, :response_proto, 1
       optional :string, :error, 2
       optional :bool, :callback, 3, :default => false
       optional :ErrorReason, :error_reason, 4
     end
     class ErrorReason < ::Protobuf::Enum
-      defined_in __FILE__
-      BAD_REQUEST_DATA = 0
-      BAD_REQUEST_PROTO = 1
-      SERVICE_NOT_FOUND = 2
-      METHOD_NOT_FOUND = 3
-      RPC_ERROR = 4
-      RPC_FAILED = 5
-      INVALID_REQUEST_PROTO = 6
-      BAD_RESPONSE_PROTO = 7
-      UNKNOWN_HOST = 8
-      IO_ERROR = 9
+      define :BAD_REQUEST_DATA, 0
+      define :BAD_REQUEST_PROTO, 1
+      define :SERVICE_NOT_FOUND, 2
+      define :METHOD_NOT_FOUND, 3
+      define :RPC_ERROR, 4
+      define :RPC_FAILED, 5
+      define :INVALID_REQUEST_PROTO, 6
+      define :BAD_RESPONSE_PROTO, 7
+      define :UNKNOWN_HOST, 8
+      define :IO_ERROR, 9
     end
   end
 end

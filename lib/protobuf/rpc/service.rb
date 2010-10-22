@@ -51,8 +51,8 @@ module Protobuf
         # See client.rb for options available, though you will likely
         # only be passing (if anything) a host, port, or the async setting
         def client options={}
-          Client.call({
-            service: self,
+          Client.new({
+            :service => self,
             :host => (options[:host] || locations[self][:host]),
             :port => (options[:port] || locations[self][:port])
           })

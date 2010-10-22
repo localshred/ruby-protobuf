@@ -1,4 +1,5 @@
 require 'eventmachine'
+require 'protobuf/rpc/rpc.pb'
 require 'protobuf/rpc/buffer'
 require 'protobuf/rpc/error'
 
@@ -7,7 +8,7 @@ module Protobuf
   module Rpc
     ClientError = Struct.new(:ClientError, :code, :message)
     
-    module ClientConnection < EM::Connection
+    class ClientConnection < EM::Connection
       # include EM::Deferrable
       
       attr_reader :options, :request, :response
@@ -27,18 +28,24 @@ module Protobuf
         # A default port (usually overridden)
         :port => '9938',
         
-        # The request sent by the client
+        # The request object sent by the client
         :request => nil, 
         
-        # The response type expected by the client
-        :response => nil, 
+        # The request type expected by the client
+        :request_type => nil, 
         
-        # The callback to invoke after the response comes back
-        :response_callback => nil, 
+        # The response type expected by the client
+        :response_type => nil, 
         
         # Whether or not to block a client call, this is actually handled by client.rb
         :async => true
         
+      }
+      
+      STATUSES = {
+        :pending => 0,
+        :succeeded => 1,
+        :failed => 2
       }
       
       def self.connect options={}
@@ -48,14 +55,47 @@ module Protobuf
         EventMachine.connect host, port, self, options
       end
       
-      def initialize options={}
-        [:service, :method].each do |opt|
-          raise "Invalid client connection configuration. #{opt} must be a defined option." if !options[opt] || options[opt].nil?
+      def initialize options={}, &failure_callback
+        @failure_callback = failure_callback
+        
+        # Verify the options that are necessary and merge them in
+        [:service, :method, :host, :port].each do |opt|
+          fail :RPC_ERROR, "Invalid client connection configuration. #{opt} must be a defined option." if !options[opt] || options[opt].nil?
         end
         @options = DEFAULT_OPTIONS.merge(options)
-        @client_error = ClientError.new
+        
+        @error = ClientError.new
         @success_callback = nil
-        @failure_callback = nil
+        @status = STATUSES[:pending]
+      rescue
+        unless failed?
+          fail :RPC_ERROR, 'Failed to initialize connection: %s' % $!.message
+        end
+      end
+      
+      # Called after the EM.connect
+      def connection_completed
+        send_request unless error?
+      rescue
+        unless failed?
+          fail :RPC_ERROR, 'Connection error: %s' % $!.message
+        end
+      end
+      
+      def post_init
+        # Setup the read buffer for data coming back
+        @buffer = Protobuf::Rpc::Buffer.new :read
+      rescue
+        unless failed?
+          fail :RPC_ERROR, 'Connection error: %s' % $!.message
+        end
+      end
+
+      # Called if user code closes connection or if network error occurs
+      def unbind
+        if error? and pending?
+          fail :RPC_ERROR, 'An error occurred connecting to host %s:%d' % [@options[:host], @options[:port]]
+        end
       end
       
       def on_success &success_callback
@@ -64,24 +104,6 @@ module Protobuf
       
       def on_failure &failure_callback
         @failure_callback = failure_callback
-      end
-      
-      # Called after the EM.connect
-      def connection_completed
-        send_request
-      end
-      
-      def post_init
-        # Setup the read buffer for data coming back
-        @buffer = Protobuf::Rpc::Buffer.new :read
-        timeout 30
-      end
-
-      # Called if user code closes connection or if network error occurs
-      def unbind
-        if error?
-          fail :IO_ERROR, 'Unable to connect to %s:%s' % [@host, @port]
-        end
       end
       
       def receive_data data
@@ -95,12 +117,12 @@ module Protobuf
         
         unless response_wrapper.has_field? :error_reason
           # Ensure client_response is an instance
-          response_type = @options[:rpc].response_type.new
+          response_type = @options[:response_type].new
         
-          parsed = response_type.parse_from_string client.response.response_proto.to_s
+          parsed = response_type.parse_from_string(response_wrapper.response_proto.to_s)
       
-          if parsed.nil? && !@client.failed?
-            raise RpcError, 'Unable to parse response from server' 
+          if parsed.nil? and not response_wrapper.has_field?(:error_reason)
+            fail :BAD_RESPONSE_PROTO, 'Unable to parse response from server'
           else
             succeed parsed
           end
@@ -109,46 +131,63 @@ module Protobuf
           # (don't try to parse out the response payload)
           fail response_wrapper.error_reason, response_wrapper.error
         end
-      rescue
-        unless $!.is_a? Protobuf::Rpc::PbError
-          fail :BAD_RESPONSE_PROTO, 'Unable to parse the response from the server: %s' % $!.message
-        else
-          fail $!.error_type, $!.message
-        end
       end
       
     private
     
+      def pending?
+        @status == STATUSES[:pending]
+      end
+    
+      def succeeded?
+        @status == STATUSES[:succeeded]
+      end
+    
+      def failed?
+        @status == STATUSES[:failed]
+      end
+    
+      def shutdown?
+        @status == STATUSES[:shutdown]
+      end
+    
       # Sends the request to the server, invoked by the connection_completed event
       def send_request
         request_wrapper = Protobuf::Socketrpc::Request.new
-        request.service_name = @service.name
-        request.method_name = @method.to_s
+        request_wrapper.service_name = @options[:service].name
+        request_wrapper.method_name = @options[:method].to_s
         
-        if @options[:request].class == @options[:rpc].request_type
-          request.request_proto = @options[:request].serialize_to_string
+        if @options[:request].class == @options[:request_type]
+          request_wrapper.request_proto = @options[:request].serialize_to_string
         else
-          fail :INVALID_REQUEST_PROTO, 'Expected request type to be type of %s' % @options[:rpc].request_type.name
+          expected = @options[:request_type].name
+          actual = @options[:request].class.name
+          fail :INVALID_REQUEST_PROTO, 'Expected request type to be type of %s, got %s instead' % [expected, actual]
         end
         
-        request_buffer = Protobuf::Rpc::Buffer.new :write, request
+        request_buffer = Protobuf::Rpc::Buffer.new :write, request_wrapper
         send_data request_buffer.write
       end
       
       def fail code, message
-        @client_error[:code] = code.is_a?(Symbol) ? Protobuf::Socketrpc::ErrorReason.const_get(error_type.to_s) : error_type
-        @client_error[:message] = message
-        @error_callback.call(@client_error) unless @error_callback.nil?
+        @status = STATUSES[:failed]
+        @error.code = code.is_a?(Symbol) ? Protobuf::Socketrpc::ErrorReason.values[code] : code
+        @error.message = message
+        @failure_callback.call(@error) unless @failure_callback.nil?
         shutdown
       end
       
       def succeed response
+        @status = STATUSES[:succeeded]
         @success_callback.call(response) unless @success_callback.nil?
         shutdown
       end
       
       def shutdown
+        # Close the outstanding connection
         close_connection
+        
+        # Stop the event loop
         EM.stop
       end
   

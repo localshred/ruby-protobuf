@@ -40,11 +40,22 @@ module Protobuf
         # setting it on the pb request, and serializing the whole 
         # response to the socket
         service.new.__send__ method, @request do |client_response|
-          @response.response_proto = client_response.serialize_to_string
+          
+          # Determine if the service tried to change response types on us
+          expected = service.rpcs[service][method].response_type
+          actual = client_response.class
+          if expected == actual
+            # response types match, so go ahead and serialize
+            @response.response_proto = client_response.serialize_to_string
+          else
+            # response types do not match, throw the appropriate error
+            raise BadResponseProto, 'Response proto changed from %s to %s' % [expected.name, actual.name]
+          end
         end
+        
       rescue => error
         unless error.is_a? PbError
-          @response.error = error.message
+          @response.error = 'GOT HERE'
           @response.error_reason = Protobuf::Socketrpc::ErrorReason::RPC_ERROR
         else
           error.to_response @response
@@ -61,13 +72,13 @@ module Protobuf
         begin
           service = WordUtils.constantize @request.service_name
         rescue
-          raise ServiceNotFound, "Service class #{request.service_name} does not exist"
+          raise ServiceNotFound, "Service class #{@request.service_name} does not exist"
         end
         
         begin
           method = WordUtils.underscore(@request.method_name).to_sym
         rescue
-          raise MethodNotFound, "Service method #{request.method_name} does not exist"
+          raise MethodNotFound, "Service method #{@request.method_name} does not exist"
         end
         
         return service, method
