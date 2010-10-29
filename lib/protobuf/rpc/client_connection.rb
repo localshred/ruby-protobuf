@@ -92,11 +92,11 @@ module Protobuf
       end
 
       # Called if user code closes connection or if network error occurs
-      def unbind
-        if error? and pending?
-          fail :RPC_ERROR, 'An error occurred connecting to host %s:%d' % [@options[:host], @options[:port]]
-        end
-      end
+      # def unbind
+      #   if error? and pending?
+      #     fail :RPC_ERROR, 'An error occurred connecting to host %s:%d' % [@options[:host], @options[:port]]
+      #   end
+      # end
       
       def on_success &success_callback
         @success_callback = success_callback
