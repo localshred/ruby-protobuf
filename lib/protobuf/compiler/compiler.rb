@@ -10,7 +10,7 @@ module Protobuf
     end
 
     def compile(proto_file, proto_dir='.', out_dir='.', file_create=true)
-      create_message(proto_file, proto_dir, out_dir, file_create)
+      create_message(proto_file, proto_dir, out_dir, file_create) unless proto_file =~ /_(service|subscriber)\.proto$/
       create_rpc(proto_file, proto_dir, out_dir, file_create)
     end
 
