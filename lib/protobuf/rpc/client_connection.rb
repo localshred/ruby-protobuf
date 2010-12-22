@@ -38,7 +38,10 @@ module Protobuf
         :response_type => nil, 
         
         # Whether or not to block a client call, this is actually handled by client.rb
-        :async => true
+        :async => true,
+        
+        # The default timeout for the request, also handled by client.rb
+        :timeout => 30
         
       }
       
@@ -91,19 +94,16 @@ module Protobuf
         end
       end
 
-      # Called if user code closes connection or if network error occurs
-      # def unbind
-      #   if error? and pending?
-      #     fail :RPC_ERROR, 'An error occurred connecting to host %s:%d' % [@options[:host], @options[:port]]
-      #   end
-      # end
-      
       def on_success &success_callback
         @success_callback = success_callback
       end
       
       def on_failure &failure_callback
         @failure_callback = failure_callback
+      end
+      
+      def on_shutdown &shutdown_callback
+        @shutdown_callback = shutdown_callback
       end
       
       def receive_data data
@@ -184,11 +184,10 @@ module Protobuf
       end
       
       def shutdown
+        @shutdown_callback.call(@status) unless @shutdown_callback.nil?
+        
         # Close the outstanding connection
         close_connection
-        
-        # Stop the event loop
-        EM.stop
       end
   
     end

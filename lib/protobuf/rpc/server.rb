@@ -55,7 +55,7 @@ module Protobuf
         
       rescue => error
         unless error.is_a? PbError
-          @response.error = 'GOT HERE'
+          @response.error = error.message
           @response.error_reason = Protobuf::Socketrpc::ErrorReason::RPC_ERROR
         else
           error.to_response @response

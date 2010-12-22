@@ -51,11 +51,13 @@ module Protobuf
         # See client.rb for options available, though you will likely
         # only be passing (if anything) a host, port, or the async setting
         def client options={}
+          configure
           Client.new({
             :service => self,
-            :host => (options[:host] || locations[self][:host]),
-            :port => (options[:port] || locations[self][:port])
-          })
+            :async => true,
+            :host => locations[self][:host],
+            :port => locations[self][:port]
+          }.merge(options))
         end
         
         # Allows service-level configuration of location
@@ -139,19 +141,12 @@ module Protobuf
         # Setup the response
         @response = rpcs[old_method.to_sym].response_type.new
 
-        begin
-          # Call the rpc method
-          __send__ method
+        # Call the rpc method
+        __send__ method
         
-          # Pass the populated response back to the server
-          server.call @response
-        rescue
-          unless $!.is_a? PbError
-            raise RpcError, '%s (%s)' % [$!.message, $!.class.name]
-          else
-            raise
-          end
-        end
+        # Pass the populated response back to the server
+        # Note this will only get called if the rpc method didn't explode (by design)
+        server.call @response
       end
       
     end

@@ -2,12 +2,11 @@ require 'eventmachine'
 require 'protobuf/rpc/client_connection'
 require 'protobuf/rpc/buffer'
 require 'protobuf/rpc/error'
+require 'timeout'
 
 module Protobuf
   module Rpc
     class Client
-      
-      # attr_reader :service, :method, :host, :port, :request, :response, :rpc
       
       def initialize options={}
         raise "Invalid client configuration. Service must be defined." if !options[:service] || options[:service].nil?
@@ -36,6 +35,7 @@ module Protobuf
           @options[:response_type] = rpc.response_type
           @options[:method] = method.to_s
           @options[:request] = params[0]
+          @do_block = !@options[:async]
           
           #### TODO remove first part here once we are able to convert everything to the new event based way of handling success/failure
           unless client_callback.nil?
@@ -44,7 +44,7 @@ module Protobuf
               on_success do |response|
                 client_callback.call self, response
               end
-
+      
               on_failure do |error|
                 client_callback.call self, nil
               end
@@ -56,7 +56,7 @@ module Protobuf
               client_callback.call self
             end
           end
-
+      
           call_rpc
         end
       end
@@ -82,53 +82,50 @@ module Protobuf
     private
       
       def call_rpc
-        # TODO handle async
-        
-        # Run the event loop (terminated by the connection &callback_ensure)
-        EM.run {
-          begin
-            ### TODO 
-            ### If a failure callback was set, just use that as a direct assignment
-            ### otherwise implement one here that simply throws an exception, since we
-            ### don't want to swallow the black holes
-            if @options[:version] == 2.0
-              if @failure_callback.nil?
-                ensure_callback = proc {|error| raise '%s: %s' % [error.code.name, error.message] }
-              else
-                ensure_callback = @failure_callback
-              end
-            else
-              ensure_callback = proc {|error|
-                # populate the error
-                @error = error
-            
-                unless @failure_callback.nil?
-                  @failure_callback.call(self)
-                else
-                  # No failure callback given, so raise
-                  raise '%s: %s' % [@error.code.name, @error.message]
-                end
-              }
-            end
-            
-            server = ClientConnection.connect @options, &ensure_callback
-          
-            unless @success_callback.nil?
-              # Response came back
-              server.on_success &@success_callback
-            end
-          
-            # Error occurred
-            server.on_failure &ensure_callback
-            
-          rescue
-            # Ensure the callback is set appropriately
-            # server.on_failure &ensure_callback
-            
-            # Trigger the error
-            server.fail :RPC_ERROR, $!.message
+        ### If a failure callback was set, just use that as a direct assignment
+        ### otherwise implement one here that simply throws an exception, since we
+        ### don't want to swallow the black holes
+        ### TODO- remove "else" portion below once 1.0 is gone
+        if @options[:version] == 2.0
+          if @failure_callback.nil?
+            ensure_callback = proc {|error| raise '%s: %s' % [error.code.name, error.message] }
+          else
+            ensure_callback = @failure_callback
           end
-        }
+        else
+          ensure_callback = proc {|error|
+            # populate the error
+            @error = error
+      
+            unless @failure_callback.nil?
+              @failure_callback.call(self)
+            else
+              # No failure callback given, so raise
+              raise '%s: %s' % [@error.code.name, @error.message]
+            end
+          }
+        end
+        
+        Thread.new { EM.run } unless EM.reactor_running?
+        
+        EM.schedule do
+          begin
+            connection = ClientConnection.connect @options, &ensure_callback
+            connection.on_success &@success_callback unless @success_callback.nil?
+            connection.on_failure &ensure_callback
+            connection.on_shutdown { @do_block = false } if @do_block
+          rescue
+            connection.fail :RPC_ERROR, $!.message
+          end
+        end
+        
+        begin
+          Timeout.timeout(@options[:timeout]) {
+            sleep 0.5 while @do_block
+            true
+          }
+        rescue
+        end
       end
       
     end
