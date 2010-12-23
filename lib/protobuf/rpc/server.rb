@@ -59,7 +59,7 @@ module Protobuf
         end
         
         # Call the service method
-        @service.__send__ method, @request
+        @service.__send__ @method, @request
       end
       
       # Parse the incoming request object into our expected request object
@@ -118,7 +118,7 @@ module Protobuf
         end
         
         @method = WordUtils.underscore(@request.method_name).to_sym
-        unless klass.instance_methods.include?(@method)
+        unless @klass.instance_methods.include?(@method)
           raise MethodNotFound, "Service method #{@request.method_name} is not defined by the service"
         end
       end
