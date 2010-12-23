@@ -65,7 +65,7 @@ module Protobuf
           configure
           Client.new({
             :service => self,
-            :async => true,
+            :async => false,
             :host => self.host,
             :port => self.port
           }.merge(options))

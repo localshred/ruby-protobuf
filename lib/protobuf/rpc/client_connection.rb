@@ -38,7 +38,7 @@ module Protobuf
         :response_type => nil, 
         
         # Whether or not to block a client call, this is actually handled by client.rb
-        :async => true,
+        :async => false,
         
         # The default timeout for the request, also handled by client.rb
         :timeout => 30
