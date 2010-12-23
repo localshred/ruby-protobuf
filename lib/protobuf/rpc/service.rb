@@ -130,7 +130,8 @@ module Protobuf
       # not any way to get around this currently (and I'm not sure you should want to)
       def rpc_failed message="RPC Failed while executing service method #{@current_method}"
         raise 'Unable to invoke rpc_failed, no failure callback is setup.' if @rpc_failure_callback.nil?
-        @rpc_failure_callback.call(RpcFailed.new(message))
+        error = message.is_a?(String) ? RpcFailed.new(message) : message
+        @rpc_failure_callback.call(error)
       end
       
       def on_send_response &responder
