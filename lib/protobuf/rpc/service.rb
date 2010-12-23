@@ -9,7 +9,7 @@ module Protobuf
     class Service
     
       attr_reader :request
-      attr_accessor :response
+      attr_accessor :response, :async_responder
       private :request, :response, :response=
       
       DEFAULT_LOCATION = {
@@ -35,8 +35,8 @@ module Protobuf
           alias_method new_method, old
           private new_method
           
-          define_method old do |*args, &server|
-            call_rpc new_method.to_sym, old.to_sym, *args, &server
+          define_method old do |pb_request|
+            call_rpc old.to_sym, pb_request
           end
         end
       
@@ -110,14 +110,26 @@ module Protobuf
         end
       end
       
-      # Convenience method for automatically failing a service method
-      def rpc_failed message="RPC Failed while executing service method #{@method}"
+      # Convenience method for automatically failing a service method.
+      # Note that this shortcuts the @async_responder paradigm. There is
+      # not any way to get around this currently (and I'm not sure you should want to)
+      def rpc_failed message="RPC Failed while executing service method #{@current_method}"
         raise RpcFailed, message
       end
       
       # Convenience wrapper around the rpc method list for a given class
       def rpcs
         self.class.rpcs[self.class]
+      end
+      
+      def on_send_response &responder
+        @responder = responder
+      end
+      
+      # Should only be called by rpc methods who set @async_responder to true
+      def send_response
+        raise "Unable to send response, responder is nil. It appears you aren't inside of an RPC request/response cycle." if @responder.nil?
+        @responder.call @response
       end
   
     private
@@ -132,27 +144,36 @@ module Protobuf
       # that response should be manipulated during the rpc method,
       # as there is no way to reliably determine the response like
       # a normal (http-based) controller method would be able to
-      def call_rpc method, old_method, *args, &server
-        @method = old_method
+      #
+      # Async behavior of responding can be achieved in the rpc method
+      # by explicitly setting self.async_responder = true. It is then
+      # the responsibility of the service method to send the response,
+      # by calling self.send_response without any arguments. The rpc
+      # server is setup to handle synchronous and asynchronous responses.
+      def call_rpc method, pb_request
+        @current_method = method
+        
+        # Allows the service to set whether or not
+        # it would like to asynchronously respond to the connected client(s)
+        @async_responder = false
         
         begin
           # Setup the request
-          pb_request = args[0]
-          @request = rpcs[old_method.to_sym].request_type.new
+          @request = rpcs[method].request_type.new
           @request.parse_from_string pb_request.request_proto
         rescue
           raise BadRequestProto, 'Unable to parse request: %s' % $!.message
         end
         
         # Setup the response
-        @response = rpcs[old_method.to_sym].response_type.new
+        @response = rpcs[method].response_type.new
 
-        # Call the rpc method
-        __send__ method
+        # Call the aliased rpc method (e.g. :rpc_find for :find)
+        __send__("rpc_#{method}".to_sym)
         
         # Pass the populated response back to the server
         # Note this will only get called if the rpc method didn't explode (by design)
-        server.call @response
+        send_response unless @async_responder
       end
       
     end

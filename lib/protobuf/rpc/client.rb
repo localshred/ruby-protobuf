@@ -117,11 +117,11 @@ module Protobuf
             connection.on_failure &ensure_callback
             connection.on_shutdown { @do_block = false } if @do_block
           rescue
-            puts $!.message
-            puts $!.backtrace.join("\n")
             connection.fail :RPC_ERROR, $!.message
           end
         end
+        
+        return unless @do_block
         
         begin
           Timeout.timeout(@options[:timeout]) {
@@ -129,6 +129,8 @@ module Protobuf
             true
           }
         rescue
+          puts $!.message
+          puts $!.backtrace.join("\n")
         end
       end
       
