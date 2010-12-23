@@ -58,6 +58,8 @@ module Protobuf
           send_response
         end
         
+        @service.on_rpc_failed &error_handler
+        
         # Call the service method
         @service.__send__ @method, @request
       end
@@ -99,11 +101,18 @@ module Protobuf
       
       # Client error handler. Receives an exception object and writes it into the @response
       def handle_error error
-        if error.is_a? PbError
-          error.to_response @response
-        else
-          @response.error = error.message
-          @response.error_reason = Protobuf::Socketrpc::ErrorReason::RPC_ERROR
+        error_handler.call(error)
+      end
+      
+      # Setup a error handler callback for registering with the service
+      def error_handler
+        @error_handler ||= lambda do |error|
+          if error.is_a? PbError
+            error.to_response @response
+          else
+            @response.error = error.message
+            @response.error_reason = Protobuf::Socketrpc::ErrorReason::RPC_ERROR
+          end
         end
       end
       

@@ -109,17 +109,22 @@ module Protobuf
           super method, args
         end
       end
+
+      # Convenience wrapper around the rpc method list for a given class
+      def rpcs
+        self.class.rpcs[self.class]
+      end
+      
+      def on_rpc_failed &rpc_failure_callback
+        @rpc_failure_callback = rpc_failure_callback
+      end
       
       # Convenience method for automatically failing a service method.
       # Note that this shortcuts the @async_responder paradigm. There is
       # not any way to get around this currently (and I'm not sure you should want to)
       def rpc_failed message="RPC Failed while executing service method #{@current_method}"
-        raise RpcFailed, message
-      end
-      
-      # Convenience wrapper around the rpc method list for a given class
-      def rpcs
-        self.class.rpcs[self.class]
+        raise 'Unable to invoke rpc_failed, no failure callback is setup.' if @rpc_failure_callback.nil?
+        @rpc_failure_callback.call(RpcFailed.new(message))
       end
       
       def on_send_response &responder
