@@ -35,8 +35,8 @@ module Protobuf
           alias_method new_method, old
           private new_method
           
-          define_method(old) do |pb_request|
-            call_rpc old.to_sym, pb_request
+          define_method(old) do |*args|
+            call_rpc old.to_sym, args[0]
           end
         end
       
