@@ -53,12 +53,15 @@ module Protobuf
         #
         # In other words, we don't send the response once the service method finishes executing
         # since the service may perform it's own operations asynchronously.
-        @service.on_send_response do |client_response|
-          parse_response_from_service(client_response)
+        @service.on_send_response do |response|
+          parse_response_from_service(response)
           send_response
         end
         
-        @service.on_rpc_failed &error_handler
+        @service.on_rpc_failed do |error|
+          handle_error(error)
+          send_response
+        end
         
         # Call the service method
         @service.__send__ @method, @request
@@ -101,20 +104,13 @@ module Protobuf
       
       # Client error handler. Receives an exception object and writes it into the @response
       def handle_error error
-        error_handler.call(error)
-      end
-      
-      # Setup a error handler callback for registering with the service
-      def error_handler
-        @error_handler ||= lambda do |error|
-          if error.is_a? PbError
-            error.to_response @response
-          elsif error.is_a? ClientError
-            PbError.new(error.message, error.code.to_s).to_response @response
-          else
-            message = error.is_a?(String) ? error : error.message
-            PbError.new(message, 'RPC_ERROR').to_response @response
-          end
+        if error.is_a? PbError
+          error.to_response @response
+        elsif error.is_a? ClientError
+          PbError.new(error.message, error.code.to_s).to_response @response
+        else
+          message = error.is_a?(String) ? error : error.message
+          PbError.new(message, 'RPC_ERROR').to_response @response
         end
       end
       
