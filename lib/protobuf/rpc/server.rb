@@ -46,7 +46,7 @@ module Protobuf
         end
         
         # Call the service method
-        service.__send__ method, @request 
+        service.__send__ method, @request
         
       rescue => error
         # Ensure we're handling any errors that try to slip out the back door
@@ -104,16 +104,16 @@ module Protobuf
       # Parses and returns the service and method name from the request wrapper proto
       def parse_service_info
         klass, method = nil, nil
+        
         begin
           klass = WordUtils.constantize @request.service_name
         rescue
-          raise ServiceNotFound, "Service class #{@request.service_name} does not exist"
+          raise ServiceNotFound, "Service class #{@request.service_name} is not found"
         end
         
-        begin
-          method = WordUtils.underscore(@request.method_name).to_sym
-        rescue
-          raise MethodNotFound, "Service method #{@request.method_name} does not exist"
+        method = WordUtils.underscore(@request.method_name).to_sym
+        unless klass.respond_to?(method)
+          raise MethodNotFound, "Service method #{@request.method_name} is not defined by the service"
         end
         
         return klass, method
