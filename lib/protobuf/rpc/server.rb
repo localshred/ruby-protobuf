@@ -109,9 +109,11 @@ module Protobuf
         @error_handler ||= lambda do |error|
           if error.is_a? PbError
             error.to_response @response
+          elsif error.is_a? ClientError
+            PbError.new(error.message, error.code.to_s).to_response @response
           else
-            @response.error = error.message
-            @response.error_reason = Protobuf::Socketrpc::ErrorReason::RPC_ERROR
+            message = error.is_a?(String) ? error : error.message
+            PbError.new(message, 'RPC_ERROR').to_response @response
           end
         end
       end
