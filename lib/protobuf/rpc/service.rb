@@ -21,7 +21,7 @@ module Protobuf
         
         # You MUST add the method name to this list if you are adding
         # instance methods below, otherwise stuff will definitely break
-        NON_RPC_METHODS = %w( rpcs call_rpc rpc_failed request response method_missing async_responder on_send_response send_response )
+        NON_RPC_METHODS = %w( rpcs call_rpc on_rpc_failed rpc_failed request response method_missing async_responder on_send_response send_response  )
         
         # Override methods being added to the class
         # If the method isn't already a private instance method, or it doesn't start with rpc_, 
@@ -35,8 +35,14 @@ module Protobuf
           alias_method new_method, old
           private new_method
           
-          define_method(old) do |pb_request|
-            call_rpc old.to_sym, pb_request
+          begin
+            define_method(old) do |pb_request|
+              call_rpc old.to_sym, pb_request
+            end
+          rescue ArgumentError => e
+            # Wrap a known issue where an instance method was defined in the class without
+            # it being ignored with NON_RPC_METHODS. 
+            raise ArgumentError, "#{e.message} (Note: This could mean that you need to add the method #{old} to the NON_RPC_METHODS list)"
           end
         end
       
