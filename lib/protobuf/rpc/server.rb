@@ -29,24 +29,10 @@ module Protobuf
         parse_request_from_buffer
       
         # Determine the service class and method name from the request
-        klass, method = parse_service_info
-        
-        # Get a new instance of the service
-        service = klass.new
-        
-        # Define our response callback to perform the "successful" response to our client
-        # This decouples the service's rpc method from our response to the client,
-        # allowing the service to be the dictator for when the response should be sent back.
-        #
-        # In other words, we don't send the response once the service method finishes executing
-        # since the service may perform it's own operations asynchronously.
-        service.on_send_response do |client_response|
-          parse_response_from_service(client_response)
-          send_response
-        end
+        parse_service_info
         
         # Call the service method
-        service.__send__ method, *[@request]
+        invoke_rpc_method
         
       rescue => error
         # Ensure we're handling any errors that try to slip out the back door
@@ -55,6 +41,26 @@ module Protobuf
       end
       
       private
+      
+      # Assuming all things check out, we can call the service method
+      def invoke_rpc_method
+        # Get a new instance of the service
+        @service = @klass.new
+        
+        # Define our response callback to perform the "successful" response to our client
+        # This decouples the service's rpc method from our response to the client,
+        # allowing the service to be the dictator for when the response should be sent back.
+        #
+        # In other words, we don't send the response once the service method finishes executing
+        # since the service may perform it's own operations asynchronously.
+        @service.on_send_response do |client_response|
+          parse_response_from_service(client_response)
+          send_response
+        end
+        
+        # Call the service method
+        @service.__send__ method, @request
+      end
       
       # Parse the incoming request object into our expected request object
       def parse_request_from_buffer
@@ -71,7 +77,7 @@ module Protobuf
       def parse_response_from_service response
         begin
           # Determine if the service tried to change response types on us
-          expected = klass.rpcs[klass][method].response_type
+          expected = @klass.rpcs[@klass][@method].response_type
           actual = response.class
           if expected == actual
             # response types match, so go ahead and serialize
@@ -103,20 +109,18 @@ module Protobuf
       
       # Parses and returns the service and method name from the request wrapper proto
       def parse_service_info
-        klass, method = nil, nil
+        @klass, @method = nil, nil
         
         begin
-          klass = WordUtils.constantize @request.service_name
+          @klass = WordUtils.constantize @request.service_name
         rescue
           raise ServiceNotFound, "Service class #{@request.service_name} is not found"
         end
         
-        method = WordUtils.underscore(@request.method_name).to_sym
-        unless klass.instance_methods.include?(method)
+        @method = WordUtils.underscore(@request.method_name).to_sym
+        unless klass.instance_methods.include?(@method)
           raise MethodNotFound, "Service method #{@request.method_name} is not defined by the service"
         end
-        
-        return klass, method
       end
       
     end
