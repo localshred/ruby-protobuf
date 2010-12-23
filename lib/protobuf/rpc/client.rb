@@ -8,12 +8,15 @@ module Protobuf
   module Rpc
     class Client
       
+      attr_reader :error, :options, :do_block
+      
       def initialize options={}
         raise "Invalid client configuration. Service must be defined." if !options[:service] || options[:service].nil?
         @error = {}
         @options = ClientConnection::DEFAULT_OPTIONS.merge(options)
         @success_callback = nil
         @failure_callback = nil
+        @do_block = !@options[:async]
       end
       
       def on_success &success_callback
@@ -27,7 +30,7 @@ module Protobuf
       # Intercept calls to service rpcs
       def method_missing method, *params, &client_callback
         service = @options[:service]
-        unless service.rpcs[service].keys.include? method
+        unless service.rpcs[service].keys.include?(method)
           super method, *params
         else
           rpc = service.rpcs[service][method.to_sym]
@@ -35,7 +38,6 @@ module Protobuf
           @options[:response_type] = rpc.response_type
           @options[:method] = method.to_s
           @options[:request] = params[0]
-          @do_block = !@options[:async]
           
           #### TODO remove first part here once we are able to convert everything to the new event based way of handling success/failure
           unless client_callback.nil?
@@ -115,6 +117,8 @@ module Protobuf
             connection.on_failure &ensure_callback
             connection.on_shutdown { @do_block = false } if @do_block
           rescue
+            puts $!.message
+            puts $!.backtrace.join("\n")
             connection.fail :RPC_ERROR, $!.message
           end
         end

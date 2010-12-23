@@ -23,4 +23,5 @@ Gem::Specification.new do |s|
   s.summary = %q{Protocol Buffers for Ruby}
   s.test_files = Dir.glob('test/**/*.rb')
   s.add_dependency('eventmachine', ['~> 0.12.10'])
+  s.add_development_dependency('rspec', ['~> 2.3.0'])
 end

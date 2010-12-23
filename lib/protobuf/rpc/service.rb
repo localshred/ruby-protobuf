@@ -12,6 +12,11 @@ module Protobuf
       attr_accessor :response
       private :request, :response, :response=
       
+      DEFAULT_LOCATION = {
+        :host => 'localhost',
+        :port => 9939
+      }
+      
       class << self
         
         # You MUST add the method name to this list if you are adding
@@ -55,8 +60,8 @@ module Protobuf
           Client.new({
             :service => self,
             :async => true,
-            :host => locations[self][:host],
-            :port => locations[self][:port]
+            :host => self.host,
+            :port => self.port
           }.merge(options))
         end
         
@@ -71,18 +76,19 @@ module Protobuf
         # e.g. 127.0.0.1:9933
         # e.g. localhost:0
         def located_at location
-          host, port = location.split ':'
+          return if location.nil? or location.downcase.strip !~ /[a-z0-9.]+:\d+/
+          host, port = location.downcase.strip.split ':'
           configure :host => host, :port => port.to_i
         end
         
         def host
           configure
-          locations[self][:host] || 'localhost'
+          locations[self][:host] || DEFAULT_LOCATION[:host]
         end
         
         def port
           configure
-          locations[self][:port] || 9939
+          locations[self][:port] || DEFAULT_LOCATION[:port]
         end
       
         # Shorthand for @locations class instance var
