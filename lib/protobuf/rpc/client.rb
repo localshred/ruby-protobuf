@@ -109,16 +109,13 @@ module Protobuf
         end
         
         Thread.new { EM.run } unless EM.reactor_running?
+        EM.error_handler {|error| raise error }
         
         EM.schedule do
-          begin
-            connection = ClientConnection.connect @options, &ensure_callback
-            connection.on_success &@success_callback unless @success_callback.nil?
-            connection.on_failure &ensure_callback
-            connection.on_shutdown { @do_block = false } if @do_block
-          rescue
-            connection.fail :RPC_ERROR, $!.message
-          end
+          connection = ClientConnection.connect @options, &ensure_callback
+          connection.on_success &@success_callback unless @success_callback.nil?
+          connection.on_failure &ensure_callback
+          connection.on_complete { @do_block = false } if @do_block
         end
         
         return unless @do_block
@@ -129,8 +126,7 @@ module Protobuf
             true
           }
         rescue
-          puts $!.message
-          puts $!.backtrace.join("\n")
+          raise 'Client timeout of %d seconds expired' % options[:timeout]
         end
       end
       

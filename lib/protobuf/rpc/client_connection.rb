@@ -48,7 +48,8 @@ module Protobuf
       STATUSES = {
         :pending => 0,
         :succeeded => 1,
-        :failed => 2
+        :failed => 2,
+        :completed => 3
       }
       
       def self.connect options={}
@@ -94,16 +95,19 @@ module Protobuf
         end
       end
 
+      # Success callback registration
       def on_success &success_callback
         @success_callback = success_callback
       end
       
+      # Failure callback registration
       def on_failure &failure_callback
         @failure_callback = failure_callback
       end
       
-      def on_shutdown &shutdown_callback
-        @shutdown_callback = shutdown_callback
+      # Completion callback registration
+      def on_complete &complete_callback
+        @complete_callback = complete_callback
       end
       
       def receive_data data
@@ -112,13 +116,21 @@ module Protobuf
       end
 
       def parse_response
+        # Close up the connection as we no longer need it
+        close_connection
+        
+        # Parse out the raw response
         response_wrapper = Protobuf::Socketrpc::Response.new
         response_wrapper.parse_from_string @buffer.data
         
-        unless response_wrapper.has_field? :error_reason
+        # Determine success or failure based on parsed data
+        if response_wrapper.has_field? :error_reason
+          # fail the call if we already know the client is failed
+          # (don't try to parse out the response payload)
+          fail response_wrapper.error_reason, response_wrapper.error
+        else
           # Ensure client_response is an instance
           response_type = @options[:response_type].new
-        
           parsed = response_type.parse_from_string(response_wrapper.response_proto.to_s)
       
           if parsed.nil? and not response_wrapper.has_field?(:error_reason)
@@ -126,10 +138,6 @@ module Protobuf
           else
             succeed parsed
           end
-        else
-          # fail the call if we already know the client is failed
-          # (don't try to parse out the response payload)
-          fail response_wrapper.error_reason, response_wrapper.error
         end
       end
       
@@ -147,8 +155,8 @@ module Protobuf
         @status == STATUSES[:failed]
       end
     
-      def shutdown?
-        @status == STATUSES[:shutdown]
+      def completed?
+        @status == STATUSES[:completed]
       end
     
       # Sends the request to the server, invoked by the connection_completed event
@@ -174,20 +182,18 @@ module Protobuf
         @error.code = code.is_a?(Symbol) ? Protobuf::Socketrpc::ErrorReason.values[code] : code
         @error.message = message
         @failure_callback.call(@error) unless @failure_callback.nil?
-        shutdown
+        complete
       end
       
       def succeed response
         @status = STATUSES[:succeeded]
         @success_callback.call(response) unless @success_callback.nil?
-        shutdown
+        complete
       end
       
-      def shutdown
-        @shutdown_callback.call(@status) unless @shutdown_callback.nil?
-        
-        # Close the outstanding connection
-        close_connection
+      def complete
+        @status = STATUSES[:completed]
+        @complete_callback.call(@status) unless @complete_callback.nil?
       end
   
     end
