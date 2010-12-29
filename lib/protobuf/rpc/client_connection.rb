@@ -185,8 +185,9 @@ module Protobuf
           @failure_callback.call(@error) unless @failure_callback.nil?
         rescue
           raise
+        ensure
+          complete
         end
-        complete
       end
       
       def succeed response
@@ -195,8 +196,9 @@ module Protobuf
           @success_callback.call(response) unless @success_callback.nil?
         rescue
           connection.fail :RPC_ERROR, 'An exception occurred while calling on_success: %s' % $!.message
+        ensure
+          complete
         end
-        complete
       end
       
       def complete
