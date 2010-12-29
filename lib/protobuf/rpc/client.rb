@@ -109,7 +109,6 @@ module Protobuf
         end
         
         Thread.new { EM.run } unless EM.reactor_running?
-        EM.error_handler {|error| raise error }
         
         EM.schedule do
           connection = ClientConnection.connect @options, &ensure_callback

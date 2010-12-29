@@ -194,10 +194,9 @@ module Protobuf
         @status = STATUSES[:succeeded]
         begin
           @success_callback.call(response) unless @success_callback.nil?
-        rescue
-          connection.fail :RPC_ERROR, 'An exception occurred while calling on_success: %s' % $!.message
-        ensure
           complete
+        rescue
+          fail :RPC_ERROR, 'An exception occurred while calling on_success: %s' % $!.message
         end
       end
       
