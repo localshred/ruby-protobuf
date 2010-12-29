@@ -181,19 +181,31 @@ module Protobuf
         @status = STATUSES[:failed]
         @error.code = code.is_a?(Symbol) ? Protobuf::Socketrpc::ErrorReason.values[code] : code
         @error.message = message
-        @failure_callback.call(@error) unless @failure_callback.nil?
+        begin
+          @failure_callback.call(@error) unless @failure_callback.nil?
+        rescue
+          raise
+        end
         complete
       end
       
       def succeed response
         @status = STATUSES[:succeeded]
-        @success_callback.call(response) unless @success_callback.nil?
+        begin
+          @success_callback.call(response) unless @success_callback.nil?
+        rescue
+          connection.fail :RPC_ERROR, 'An exception occurred while calling on_success: %s' % $!.message
+        end
         complete
       end
       
       def complete
         @status = STATUSES[:completed]
-        @complete_callback.call(@status) unless @complete_callback.nil?
+        begin
+          @complete_callback.call(@status) unless @complete_callback.nil?
+        rescue
+          raise
+        end
       end
   
     end
