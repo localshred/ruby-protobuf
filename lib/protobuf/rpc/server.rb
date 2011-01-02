@@ -85,8 +85,12 @@ module Protobuf
           expected = @klass.rpcs[@klass][@method].response_type
           actual = response.class
           if expected == actual
-            # response types match, so go ahead and serialize
-            @response.response_proto = response.serialize_to_string
+            begin
+              # response types match, so go ahead and serialize
+              @response.response_proto = response.serialize_to_string
+            rescue
+              raise BadResponseProto, $!.message
+            end
           else
             # response types do not match, throw the appropriate error
             raise BadResponseProto, 'Response proto changed from %s to %s' % [expected.name, actual.name]

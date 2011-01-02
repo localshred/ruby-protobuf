@@ -59,7 +59,7 @@ describe Protobuf::Rpc::Client do
     it 'should be able to set and get local variables within client response blocks' do
       outer_value = 'OUTER'
       inner_value = 'INNER'
-      client = Spec::Proto::TestService.client
+      client = Spec::Proto::TestService.client(:async => true)
       
       EM.should_receive(:reactor_running?).and_return(true)
       EM.stub!(:schedule) do

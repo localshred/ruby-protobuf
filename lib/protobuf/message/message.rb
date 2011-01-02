@@ -5,6 +5,7 @@ require 'protobuf/message/decoder'
 require 'protobuf/message/encoder'
 require 'protobuf/message/field'
 require 'protobuf/message/protoable'
+require 'json'
 
 module Protobuf
   OPTIONS = {}
@@ -362,8 +363,38 @@ module Protobuf
       end
     end
     
+    def to_hash
+      result = {}
+      build_value = lambda {|field, value|
+        if !field.optional? || (field.optional? && has_field?(field.name))
+          case field
+          when Field::MessageField
+            value.to_hash
+          when Field::EnumField
+            if value.is_a?(EnumValue)
+              value.to_i
+            else
+              field.type.name_by_value(value).to_i
+            end
+          else
+            value
+          end
+        end
+      }
+      each_field do |field, value|
+        if field.repeated?
+          result[field.name] = value.map do |v|
+            build_value.call(field, v)
+          end
+        else
+          result[field.name] = build_value.call(field, value)
+        end
+      end
+      result
+    end
+    
     def to_json
-      @values.to_json
+      to_hash.to_json
     end
   end
 end
