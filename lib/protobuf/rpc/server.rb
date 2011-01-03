@@ -11,6 +11,7 @@ module Protobuf
       # Initialize a new read buffer for storing client request info
       def post_init
         @buffer = Protobuf::Rpc::Buffer.new :read
+        @did_respond = false
       end
       
       # Receive a chunk of data, potentially flushed to handle_client
@@ -54,13 +55,17 @@ module Protobuf
         # In other words, we don't send the response once the service method finishes executing
         # since the service may perform it's own operations asynchronously.
         @service.on_send_response do |response|
-          parse_response_from_service(response)
-          send_response
+          unless @did_respond
+            parse_response_from_service(response)
+            send_response
+          end
         end
         
         @service.on_rpc_failed do |error|
-          handle_error(error)
-          send_response
+          unless @did_respond
+            handle_error(error)
+            send_response
+          end
         end
         
         # Call the service method
@@ -102,8 +107,10 @@ module Protobuf
       
       # Write the response wrapper to the client
       def send_response
+        raise 'Response already sent to client' if @did_respond
         response_buffer = Protobuf::Rpc::Buffer.new(:write, @response)
         send_data(response_buffer.write)
+        @did_respond = true
       end
       
       # Client error handler. Receives an exception object and writes it into the @response
