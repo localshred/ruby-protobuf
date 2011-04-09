@@ -86,12 +86,16 @@ module Protobuf
       # response to the protobuf response wrapper
       def parse_response_from_service response
         begin
-          # Determine if the service tried to change response types on us
           expected = @klass.rpcs[@klass][@method].response_type
+          
+          # Cannibalize the response if it's a Hash
+          response = expected.new(response) if response.is_a?(Hash)
           actual = response.class
+          
+          # Determine if the service tried to change response types on us
           if expected == actual
             begin
-              # response types match, so go ahead and serialize
+              # Response types match, so go ahead and serialize
               @response.response_proto = response.serialize_to_string
             rescue
               raise BadResponseProto, $!.message

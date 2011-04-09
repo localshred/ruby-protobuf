@@ -77,4 +77,17 @@ describe Protobuf::Rpc::Client do
     
   end
   
+  context 'when receiving request objects' do
+    
+    it 'should be able to create the correct request object if passed a hash' do
+      client = Spec::Proto::TestService.client
+      client.should_receive(:call_rpc)
+      client.find({:name => 'Test Name', :active => false})
+      client.options[:request].should be_a Spec::Proto::ResourceFindRequest
+      client.options[:request].name.should == 'Test Name'
+      client.options[:request].active.should == false
+    end
+    
+  end
+  
 end

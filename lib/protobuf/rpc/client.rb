@@ -37,7 +37,7 @@ module Protobuf
           @options[:request_type] = rpc.request_type
           @options[:response_type] = rpc.response_type
           @options[:method] = method.to_s
-          @options[:request] = params[0]
+          @options[:request] = params[0].is_a?(Hash) ? @options[:request_type].new(params[0]) : params[0]
           
           #### TODO remove first part here once we are able to convert everything to the new event based way of handling success/failure
           unless client_callback.nil?
