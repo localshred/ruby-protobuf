@@ -1,3 +1,4 @@
+require 'protobuf/common/logger'
 require 'protobuf/rpc/client'
 require 'protobuf/rpc/error'
 
@@ -7,6 +8,7 @@ module Protobuf
     RpcMethod = Struct.new "RpcMethod", :service, :method, :request_type, :response_type
     
     class Service
+      include Protobuf::Logger::LogMethods
     
       attr_reader :request
       attr_accessor :response, :async_responder
@@ -110,7 +112,10 @@ module Protobuf
       # functionality, so throw an appropriate error, otherwise go to super
       def method_missing method, *params
         if rpcs.key? method
-          raise MethodNotFound, "#{self}##{method} was defined as a valid rpc method, but was not implemented."
+          exc = MethodNotFound.new "#{self}##{method} was defined as a valid rpc method, but was not implemented."
+          log_error exc.message
+          log_error exc.backtrace.join("\n")
+          raise exc
         else
           super method, args
         end
@@ -129,8 +134,14 @@ module Protobuf
       # Note that this shortcuts the @async_responder paradigm. There is
       # not any way to get around this currently (and I'm not sure you should want to)
       def rpc_failed message="RPC Failed while executing service method #{@current_method}"
-        raise 'Unable to invoke rpc_failed, no failure callback is setup.' if @rpc_failure_callback.nil?
+        if @rpc_failure_callback.nil?
+          exc = RuntimeError.new 'Unable to invoke rpc_failed, no failure callback is setup.' 
+          log_error exc.message
+          log_error exc.backtrace.join("\n")
+          raise exc
+        end
         error = message.is_a?(String) ? RpcFailed.new(message) : message
+        log_warn '[service] RPC Failed: %s' error.message
         @rpc_failure_callback.call(error)
       end
       
@@ -140,7 +151,12 @@ module Protobuf
       
       # Should only be called by rpc methods who set @async_responder to true
       def send_response
-        raise "Unable to send response, responder is nil. It appears you aren't inside of an RPC request/response cycle." if @responder.nil?
+        if @responder.nil?
+          exc = RuntimeError.new "Unable to send response, responder is nil. It appears you aren't inside of an RPC request/response cycle."
+          log_error exc.message
+          log_error exc.backtrace.join("\n")
+          raise exc
+        end
         @responder.call @response
       end
   
@@ -174,18 +190,28 @@ module Protobuf
           @request = rpcs[method].request_type.new
           @request.parse_from_string pb_request.request_proto
         rescue
-          raise BadRequestProto, 'Unable to parse request: %s' % $!.message
+          exc = BadRequestProto.new 'Unable to parse request: %s' % $!.message
+          log_error exc.message
+          log_error exc.backtrace.join("\n")
+          raise exc
         end
         
         # Setup the response
         @response = rpcs[method].response_type.new
 
+        log_debug '[service] calling service method %s#%s' % [self.class.name, method]
         # Call the aliased rpc method (e.g. :rpc_find for :find)
         __send__("rpc_#{method}".to_sym)
+        log_debug '[service] completed service method %s#%s' % [self.class.name, method]
         
         # Pass the populated response back to the server
         # Note this will only get called if the rpc method didn't explode (by design)
-        send_response unless @async_responder
+        if @async_responder
+          log_debug '[service] async request, not sending response (yet)'
+        else
+          log_debug '[service] trigger server send_response'
+          send_response
+        end
       end
       
     end

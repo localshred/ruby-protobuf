@@ -1,4 +1,5 @@
 require 'eventmachine'
+require 'protobuf/common/logger'
 require 'protobuf/rpc/rpc.pb'
 require 'protobuf/rpc/buffer'
 require 'protobuf/rpc/error'
@@ -9,51 +10,34 @@ module Protobuf
     ClientError = Struct.new(:ClientError, :code, :message)
     
     class ClientConnection < EM::Connection
-      # include EM::Deferrable
+      include Protobuf::Logger::LogMethods
       
       attr_reader :options, :request, :response
       attr_reader :error, :error_reason, :error_message
 
       DEFAULT_OPTIONS = {
-        
-        # Service to invoke
-        :service => nil,
-        
-        # Service method to call
-        :method => nil,
-        
-        # A default host (usually overridden)
-        :host => 'localhost',
-        
-        # A default port (usually overridden)
-        :port => '9938',
-        
-        # The request object sent by the client
-        :request => nil, 
-        
-        # The request type expected by the client
-        :request_type => nil, 
-        
-        # The response type expected by the client
-        :response_type => nil, 
-        
-        # Whether or not to block a client call, this is actually handled by client.rb
-        :async => false,
-        
-        # The default timeout for the request, also handled by client.rb
-        :timeout => 30
-        
+        :service        => nil,           # Service to invoke
+        :method         => nil,           # Service method to call
+        :host           => 'localhost',   # A default host (usually overridden)
+        :port           => '9938',        # A default port (usually overridden)
+        :request        => nil,           # The request object sent by the client
+        :request_type   => nil,           # The request type expected by the client
+        :response_type  => nil,           # The response type expected by the client
+        :async          => false,         # Whether or not to block a client call, this is actually handled by client.rb
+        :timeout        => 30             # The default timeout for the request, also handled by client.rb
       }
       
+      # For state tracking
       STATUSES = {
-        :pending => 0,
-        :succeeded => 1,
-        :failed => 2,
-        :completed => 3
+        :pending    => 0,
+        :succeeded  => 1,
+        :failed     => 2,
+        :completed  => 3
       }
       
       def self.connect options={}
         options = DEFAULT_OPTIONS.merge(options)
+        log_debug '[client-cnxn] New connection: %s' % options.inspect
         host = options[:host]
         port = options[:port]
         EventMachine.connect host, port, self, options
@@ -64,35 +48,32 @@ module Protobuf
         
         # Verify the options that are necessary and merge them in
         [:service, :method, :host, :port].each do |opt|
-          fail :RPC_ERROR, "Invalid client connection configuration. #{opt} must be a defined option." if !options[opt] || options[opt].nil?
+          fail(:RPC_ERROR, "Invalid client connection configuration. #{opt} must be a defined option.") if !options[opt] || options[opt].nil?
         end
         @options = DEFAULT_OPTIONS.merge(options)
+        log_debug '[client-cnxn] Client Initialized: %s' % options.inspect
         
         @error = ClientError.new
         @success_callback = nil
         @status = STATUSES[:pending]
       rescue
-        unless failed?
-          fail :RPC_ERROR, 'Failed to initialize connection: %s' % $!.message
-        end
+        fail(:RPC_ERROR, 'Failed to initialize connection: %s' % $!.message) unless failed?
       end
       
       # Called after the EM.connect
       def connection_completed
+        log_debug '[client-cnxn] Established server connection, sending request'
         send_request unless error?
       rescue
-        unless failed?
-          fail :RPC_ERROR, 'Connection error: %s' % $!.message
-        end
+        fail(:RPC_ERROR, 'Connection error: %s' % $!.message) unless failed?
       end
       
+      # Setup the read buffer for data coming back
       def post_init
-        # Setup the read buffer for data coming back
+        log_debug '[client-cnxn] Post init, new read buffer created'
         @buffer = Protobuf::Rpc::Buffer.new :read
       rescue
-        unless failed?
-          fail :RPC_ERROR, 'Connection error: %s' % $!.message
-        end
+        fail(:RPC_ERROR, 'Connection error: %s' % $!.message) unless failed?
       end
 
       # Success callback registration
@@ -111,6 +92,7 @@ module Protobuf
       end
       
       def receive_data data
+        log_debug '[client-cnxn] receive_data: %s' % data
         @buffer << data
         parse_response if @buffer.flushed?
       end
@@ -119,16 +101,22 @@ module Protobuf
         # Close up the connection as we no longer need it
         close_connection
         
+        log_debug '[client-cnxn] Parsing response from server (connection closed)'
+        
         # Parse out the raw response
         response_wrapper = Protobuf::Socketrpc::Response.new
         response_wrapper.parse_from_string @buffer.data
         
         # Determine success or failure based on parsed data
         if response_wrapper.has_field? :error_reason
+          log_debug '[client-cnxn] Error response parsed'
+          
           # fail the call if we already know the client is failed
           # (don't try to parse out the response payload)
           fail response_wrapper.error_reason, response_wrapper.error
         else
+          log_debug '[client-cnxn] Successful response parsed'
+          
           # Ensure client_response is an instance
           response_type = @options[:response_type].new
           parsed = response_type.parse_from_string(response_wrapper.response_proto.to_s)
@@ -173,6 +161,7 @@ module Protobuf
           fail :INVALID_REQUEST_PROTO, 'Expected request type to be type of %s, got %s instead' % [expected, actual]
         end
         
+        log_debug '[client-cnxn] Sending Request: %s' % request_wrapper.inspect
         request_buffer = Protobuf::Rpc::Buffer.new :write, request_wrapper
         send_data request_buffer.write
       end
@@ -181,9 +170,12 @@ module Protobuf
         @status = STATUSES[:failed]
         @error.code = code.is_a?(Symbol) ? Protobuf::Socketrpc::ErrorReason.values[code] : code
         @error.message = message
+        log_debug '[client-cnxn] Server failed request (invoking on_failure): %s' % @error.inspect
         begin
           @failure_callback.call(@error) unless @failure_callback.nil?
         rescue
+          log_error '[client-cnxn] Failure callback error encountered: %s' % $!.message
+          log_error '[client-cnxn] %s' % $!.backtrace.join("\n")
           raise
         ensure
           complete
@@ -193,9 +185,12 @@ module Protobuf
       def succeed response
         @status = STATUSES[:succeeded]
         begin
+          log_debug '[client-cnxn] Server succeeded request (invoking on_success)'
           @success_callback.call(response) unless @success_callback.nil?
           complete
         rescue
+          log_error '[client-cnxn] Success callback error encountered: %s' % $!.message
+          log_error '[client-cnxn] %s' % $!.backtrace.join("\n")
           fail :RPC_ERROR, 'An exception occurred while calling on_success: %s' % $!.message
         end
       end
@@ -203,8 +198,11 @@ module Protobuf
       def complete
         @status = STATUSES[:completed]
         begin
+          log_debug '[client-cnxn] Response proceessing complete'
           @complete_callback.call(@status) unless @complete_callback.nil?
         rescue
+          log_error '[client-cnxn] Complete callback error encountered: %s' % $!.message
+          log_error '[client-cnxn] %s' % $!.backtrace.join("\n")
           raise
         end
       end
