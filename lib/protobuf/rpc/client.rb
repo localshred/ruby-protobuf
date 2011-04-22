@@ -34,7 +34,7 @@ module Protobuf
       def method_missing method, *params, &client_callback
         service = @options[:service]
         unless service.rpcs[service].keys.include?(method)
-          log_warn '[client] %s#%s not rpc method, passing to super' % [service.name, method.to_s]
+          log_error '[client] %s#%s not rpc method, passing to super' % [service.name, method.to_s]
           super method, *params
         else
           log_debug '[client] %s#%s' % [service.name, method.to_s]
@@ -49,9 +49,9 @@ module Protobuf
           
           #### TODO remove first part here once we are able to convert everything to the new event based way of handling success/failure
           unless client_callback.nil?
-            @options[:version] = 1.0
-            log_debug '[client] version = 1.0'
             if client_callback.arity == 2
+              @options[:version] = 1.0
+              log_debug '[client] version = 1.0'
               on_success {|res| client_callback.call(self, res) }
               on_failure {|err| client_callback.call(self, nil) }
             else
@@ -97,9 +97,6 @@ module Protobuf
         if @options[:version] == 2.0
           if @failure_callback.nil?
             ensure_callback = proc do |error|
-              # exception = RuntimeError.new '%s: %s' % [error.code.name, error.message]
-              # log_error '[client] %s' % exception.message
-              # log_debug exception.backtrace.join("\n")
               raise '%s: %s' % [error.code.name, error.message]
             end
           else
@@ -115,10 +112,12 @@ module Protobuf
         Thread.new { EM.run } unless EM.reactor_running?
         
         EM.schedule do
+          log_debug '[client] Scheduling client connection to be created on next tick'
           connection = ClientConnection.connect @options, &ensure_callback
           connection.on_success &@success_callback unless @success_callback.nil?
           connection.on_failure &ensure_callback
           connection.on_complete { @do_block = false } if @do_block
+          log_debug '[client] Connection scheduled'
         end
         
         return unless @do_block
@@ -129,10 +128,10 @@ module Protobuf
             true
           }
         rescue
-          exception = RuntimeError.new 'Client timeout of %d seconds expired' % options[:timeout]
-          log_error '[client] %s' % exception.message
-          log_error exception.backtrace.join("\n")
-          raise exception
+          error = ClientError.new
+          error.code = Protobuf::Socketrpc::ErrorReason::RPC_ERROR
+          error.message = 'Client timeout of %d seconds expired' % @options[:timeout]
+          ensure_callback.call(error)
         end
       end
       

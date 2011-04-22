@@ -3,6 +3,7 @@ require 'protobuf/common/logger'
 require 'protobuf/rpc/rpc.pb'
 require 'protobuf/rpc/buffer'
 require 'protobuf/rpc/error'
+require 'protobuf/rpc/stat'
 
 # Handles client connections to the server
 module Protobuf
@@ -28,7 +29,7 @@ module Protobuf
       }
       
       # For state tracking
-      STATUSES = {
+      STATES = {
         :pending    => 0,
         :succeeded  => 1,
         :failed     => 2,
@@ -37,7 +38,7 @@ module Protobuf
       
       def self.connect options={}
         options = DEFAULT_OPTIONS.merge(options)
-        log_debug '[client-cnxn] New connection: %s' % options.inspect
+        Protobuf::Logger.debug '[client-cnxn] Connecting to server: %s' % options.inspect
         host = options[:host]
         port = options[:port]
         EventMachine.connect host, port, self, options
@@ -55,25 +56,14 @@ module Protobuf
         
         @error = ClientError.new
         @success_callback = nil
-        @status = STATUSES[:pending]
+        @state = STATES[:pending]
+        
+        @stats = Protobuf::Rpc::Stat.new(:CLIENT, true)
+        @stats.server = [@options[:port], @options[:host]]
+        @stats.service = @options[:service].name
+        @stats.method = @options[:method]
       rescue
         fail(:RPC_ERROR, 'Failed to initialize connection: %s' % $!.message) unless failed?
-      end
-      
-      # Called after the EM.connect
-      def connection_completed
-        log_debug '[client-cnxn] Established server connection, sending request'
-        send_request unless error?
-      rescue
-        fail(:RPC_ERROR, 'Connection error: %s' % $!.message) unless failed?
-      end
-      
-      # Setup the read buffer for data coming back
-      def post_init
-        log_debug '[client-cnxn] Post init, new read buffer created'
-        @buffer = Protobuf::Rpc::Buffer.new :read
-      rescue
-        fail(:RPC_ERROR, 'Connection error: %s' % $!.message) unless failed?
       end
 
       # Success callback registration
@@ -91,17 +81,72 @@ module Protobuf
         @complete_callback = complete_callback
       end
       
+      # Called after the EM.connect
+      def connection_completed
+        log_debug '[client-cnxn] Established server connection, sending request'
+        send_request unless error?
+      rescue
+        fail(:RPC_ERROR, 'Connection error: %s' % $!.message) unless failed?
+      end
+      
+      # Setup the read buffer for data coming back
+      def post_init
+        log_debug '[client-cnxn] Post init, new read buffer created'
+        @buffer = Protobuf::Rpc::Buffer.new :read
+      rescue
+        fail(:RPC_ERROR, 'Connection error: %s' % $!.message) unless failed?
+      end
+      
       def receive_data data
         log_debug '[client-cnxn] receive_data: %s' % data
         @buffer << data
         parse_response if @buffer.flushed?
       end
-
+    
+      def pending?
+        @state == STATES[:pending]
+      end
+    
+      def succeeded?
+        @state == STATES[:succeeded]
+      end
+    
+      def failed?
+        @state == STATES[:failed]
+      end
+    
+      def completed?
+        @state == STATES[:completed]
+      end
+      
+    private
+    
+      # Sends the request to the server, invoked by the connection_completed event
+      def send_request
+        request_wrapper = Protobuf::Socketrpc::Request.new
+        request_wrapper.service_name = @options[:service].name
+        request_wrapper.method_name = @options[:method].to_s
+        
+        if @options[:request].class == @options[:request_type]
+          request_wrapper.request_proto = @options[:request].serialize_to_string
+        else
+          expected = @options[:request_type].name
+          actual = @options[:request].class.name
+          fail :INVALID_REQUEST_PROTO, 'Expected request type to be type of %s, got %s instead' % [expected, actual]
+        end
+        
+        log_debug '[client-cnxn] Sending Request: %s' % request_wrapper.inspect
+        request_buffer = Protobuf::Rpc::Buffer.new(:write, request_wrapper)
+        send_data(request_buffer.write)
+        @stats.request_size = request_buffer.size
+      end
+      
       def parse_response
         # Close up the connection as we no longer need it
         close_connection
         
         log_debug '[client-cnxn] Parsing response from server (connection closed)'
+        @stats.response_size = @buffer.size
         
         # Parse out the raw response
         response_wrapper = Protobuf::Socketrpc::Response.new
@@ -129,49 +174,14 @@ module Protobuf
         end
       end
       
-    private
-    
-      def pending?
-        @status == STATUSES[:pending]
-      end
-    
-      def succeeded?
-        @status == STATUSES[:succeeded]
-      end
-    
-      def failed?
-        @status == STATUSES[:failed]
-      end
-    
-      def completed?
-        @status == STATUSES[:completed]
-      end
-    
-      # Sends the request to the server, invoked by the connection_completed event
-      def send_request
-        request_wrapper = Protobuf::Socketrpc::Request.new
-        request_wrapper.service_name = @options[:service].name
-        request_wrapper.method_name = @options[:method].to_s
-        
-        if @options[:request].class == @options[:request_type]
-          request_wrapper.request_proto = @options[:request].serialize_to_string
-        else
-          expected = @options[:request_type].name
-          actual = @options[:request].class.name
-          fail :INVALID_REQUEST_PROTO, 'Expected request type to be type of %s, got %s instead' % [expected, actual]
-        end
-        
-        log_debug '[client-cnxn] Sending Request: %s' % request_wrapper.inspect
-        request_buffer = Protobuf::Rpc::Buffer.new :write, request_wrapper
-        send_data request_buffer.write
-      end
-      
       def fail code, message
-        @status = STATUSES[:failed]
+        @state = STATES[:failed]
         @error.code = code.is_a?(Symbol) ? Protobuf::Socketrpc::ErrorReason.values[code] : code
         @error.message = message
         log_debug '[client-cnxn] Server failed request (invoking on_failure): %s' % @error.inspect
         begin
+          @stats.end
+          @stats.log_stats
           @failure_callback.call(@error) unless @failure_callback.nil?
         rescue
           log_error '[client-cnxn] Failure callback error encountered: %s' % $!.message
@@ -183,9 +193,11 @@ module Protobuf
       end
       
       def succeed response
-        @status = STATUSES[:succeeded]
+        @state = STATES[:succeeded]
         begin
           log_debug '[client-cnxn] Server succeeded request (invoking on_success)'
+          @stats.end
+          @stats.log_stats
           @success_callback.call(response) unless @success_callback.nil?
           complete
         rescue
@@ -196,10 +208,10 @@ module Protobuf
       end
       
       def complete
-        @status = STATUSES[:completed]
+        @state = STATES[:completed]
         begin
           log_debug '[client-cnxn] Response proceessing complete'
-          @complete_callback.call(@status) unless @complete_callback.nil?
+          @complete_callback.call(@state) unless @complete_callback.nil?
         rescue
           log_error '[client-cnxn] Complete callback error encountered: %s' % $!.message
           log_error '[client-cnxn] %s' % $!.backtrace.join("\n")

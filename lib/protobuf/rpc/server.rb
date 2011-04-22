@@ -16,8 +16,8 @@ module Protobuf
       def post_init
         log_debug '[server] Post init, new read buffer created'
         
-        @stat = Protobuf::Rpc::Stat.new(:SERVER, true)
-        @stat.client = Socket.unpack_sockaddr_in(get_peername)
+        @stats = Protobuf::Rpc::Stat.new(:SERVER, true)
+        @stats.client = Socket.unpack_sockaddr_in(get_peername)
         
         @buffer = Protobuf::Rpc::Buffer.new :read
         @did_respond = false
@@ -32,7 +32,7 @@ module Protobuf
       
       # Invoke the service method dictated by the proto wrapper request object
       def handle_client
-        @stat.request_size = @buffer.size
+        @stats.request_size = @buffer.size
         
         # Setup the initial request and response
         @request = Protobuf::Socketrpc::Request.new
@@ -52,6 +52,8 @@ module Protobuf
         
       rescue => error
         # Ensure we're handling any errors that try to slip out the back door
+        log_error error.message
+        log_error error.backtrace.join("\n")
         handle_error(error)
         send_response
       end
@@ -84,7 +86,7 @@ module Protobuf
         end
         
         # Call the service method
-        log_debug '[server] Invoking %s#%s with request %s' [@klass.name, @method, @request.inspect]
+        log_debug '[server] Invoking %s#%s with request %s' % [@klass.name, @method, @request.inspect]
         @service.__send__ @method, @request
       end
       
@@ -96,7 +98,6 @@ module Protobuf
         rescue => error
           exc = BadRequestData.new 'Unable to parse request: %s' % error.message
           log_error exc.message
-          log_error exc.backtrace.join("\n")
           raise exc
         end
       end
@@ -128,6 +129,8 @@ module Protobuf
             raise BadResponseProto, 'Response proto changed from %s to %s' % [expected.name, actual.name]
           end
         rescue => error
+          log_error error.message
+          log_error error.backtrace.join("\n")
           handle_error(error)
         end
       end
@@ -138,8 +141,9 @@ module Protobuf
         log_debug '[server] Sending response to client: %s' % @response.inspect
         response_buffer = Protobuf::Rpc::Buffer.new(:write, @response)
         send_data(response_buffer.write)
-        @stat.response_size = response_buffer.size
-        @stat.log_stats
+        @stats.response_size = response_buffer.size
+        @stats.end
+        @stats.log_stats
         @did_respond = true
       end
       
@@ -170,6 +174,9 @@ module Protobuf
         unless @klass.instance_methods.include?(@method)
           raise MethodNotFound, "Service method #{@request.method_name} is not defined by the service"
         end
+        
+        @stats.service = @klass.name
+        @stats.method = @method
       end
       
     end

@@ -119,7 +119,6 @@ module Protobuf
     end
 
     def initialize(values={})
-      puts values.inspect
       @values = {}
 
       self.class.fields.each do |tag, field|

@@ -114,7 +114,6 @@ module Protobuf
         if rpcs.key? method
           exc = MethodNotFound.new "#{self}##{method} was defined as a valid rpc method, but was not implemented."
           log_error exc.message
-          log_error exc.backtrace.join("\n")
           raise exc
         else
           super method, args
@@ -137,11 +136,10 @@ module Protobuf
         if @rpc_failure_callback.nil?
           exc = RuntimeError.new 'Unable to invoke rpc_failed, no failure callback is setup.' 
           log_error exc.message
-          log_error exc.backtrace.join("\n")
           raise exc
         end
         error = message.is_a?(String) ? RpcFailed.new(message) : message
-        log_warn '[service] RPC Failed: %s' error.message
+        log_warn '[service] RPC Failed: %s' % error.message
         @rpc_failure_callback.call(error)
       end
       
@@ -154,7 +152,6 @@ module Protobuf
         if @responder.nil?
           exc = RuntimeError.new "Unable to send response, responder is nil. It appears you aren't inside of an RPC request/response cycle."
           log_error exc.message
-          log_error exc.backtrace.join("\n")
           raise exc
         end
         @responder.call @response
@@ -192,7 +189,7 @@ module Protobuf
         rescue
           exc = BadRequestProto.new 'Unable to parse request: %s' % $!.message
           log_error exc.message
-          log_error exc.backtrace.join("\n")
+          log_error $!.backtrace.join("\n")
           raise exc
         end
         

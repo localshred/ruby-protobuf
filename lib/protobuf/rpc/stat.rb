@@ -4,7 +4,7 @@ require 'protobuf/common/logger'
 module Protobuf
   module Rpc
     class Stat
-      attr_accessor :type, :start_time, :end_time, :request_size, :response_size, :client
+      attr_accessor :type, :start_time, :end_time, :request_size, :response_size, :client, :server, :service, :method
       
       TYPES = [:SERVER, :CLIENT]
       
@@ -21,6 +21,14 @@ module Protobuf
         @client ? '%s:%d' % [@client[:ip], @client[:port]] : nil
       end
       
+      def server= peer
+        @server = {:port => peer[0], :ip => peer[1]}
+      end
+      
+      def server
+        @server ? '%s:%d' % [@server[:ip], @server[:port]] : nil
+      end
+      
       def sizes
         '%dB/%dB' % [@request_size || 0, @response_size || 0]
       end
@@ -34,8 +42,12 @@ module Protobuf
         @end_time ||= Time.now
       end
       
+      def rpc
+        service && method ? '%s#%s' % [service, method] : nil
+      end
+      
       def elapsed_time
-        (start_time && end_time ? (end_time - start_time).round(2) : nil)
+        (start_time && end_time ? '%ss' % (end_time - start_time).round(4) : nil)
       end
       
       def log_stats
@@ -44,11 +56,11 @@ module Protobuf
       
       def to_s
         [
-          @type == :SERVER ? 'SRV' : 'CLT',
-          @start_time.strftime('%x %X'),
+          @type == :SERVER ? '[SRV]' : '[CLT]',
+          rpc,
           elapsed_time,
           sizes,
-          client
+          @type == :SERVER ? server : client
         ].delete_if{|v| v.nil? }.join(' - ')
       end
       
