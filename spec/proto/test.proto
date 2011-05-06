@@ -16,6 +16,7 @@ message Resource {
   optional string name = 1;
   optional int64 date_created = 2;
   optional StatusType status = 3;
+  repeated StatusType repeated_enum = 4;
 }
 
 message Nested {

@@ -23,6 +23,5 @@ PLATFORMS
   ruby
 
 DEPENDENCIES
-  eventmachine (~> 0.12.10)
   rspec (~> 2.3.0)
   ruby_protobuf!

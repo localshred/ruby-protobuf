@@ -32,7 +32,34 @@ describe Protobuf::Message do
       end
       nested.status = Spec::Proto::StatusType::ENABLED
       
-      nested.to_json.should == %Q{{"name":"NESTED","resource":{"name":"RESOURCE SINGLE","date_created":#{date_created},"status":0},"multiple_resources":[{"name":"RESOURCE MULTIPLE 0","date_created":#{date_created},"status":0},{"name":"RESOURCE MULTIPLE 1","date_created":#{date_created},"status":0}],"status":1}}
+      nested.to_json.should == %Q{{"name":"NESTED","resource":{"name":"RESOURCE SINGLE","date_created":#{date_created},"status":0,"repeated_enum":[]},"multiple_resources":[{"name":"RESOURCE MULTIPLE 0","date_created":#{date_created},"status":0,"repeated_enum":[]},{"name":"RESOURCE MULTIPLE 1","date_created":#{date_created},"status":0,"repeated_enum":[]}],"status":1}}
+    end
+    
+    
+  end
+  
+  context 'when converting to a hash' do
+    
+    context 'when message has repeated enum field' do
+      
+      it 'provides an array of integers' do
+        resource = Spec::Proto::Resource.new :repeated_enum => [
+          Spec::Proto::StatusType::PENDING,
+          Spec::Proto::StatusType::ENABLED,
+          Spec::Proto::StatusType::ENABLED,
+          Spec::Proto::StatusType::DISABLED,
+          Spec::Proto::StatusType::DELETED
+        ]
+        
+        resource.to_hash[:repeated_enum].should == [
+          Spec::Proto::StatusType::PENDING.value,
+          Spec::Proto::StatusType::ENABLED.value,
+          Spec::Proto::StatusType::ENABLED.value,
+          Spec::Proto::StatusType::DISABLED.value,
+          Spec::Proto::StatusType::DELETED.value
+        ]
+      end
+      
     end
     
   end

@@ -20,6 +20,7 @@ module Spec
       optional :string, :name, 1
       optional :int64, :date_created, 2
       optional :StatusType, :status, 3
+      repeated :StatusType, :repeated_enum, 4
     end
     class Nested < ::Protobuf::Message
       optional :string, :name, 1

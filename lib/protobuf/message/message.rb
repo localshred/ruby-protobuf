@@ -373,8 +373,10 @@ module Protobuf
           when Field::EnumField
             if value.is_a?(EnumValue)
               value.to_i
+            elsif value.is_a?(Symbol)
+              field.type[value].to_i
             else
-              field.type.name_by_value(value).to_i
+              value
             end
           else
             value
