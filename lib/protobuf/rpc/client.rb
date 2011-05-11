@@ -52,6 +52,44 @@ module Protobuf
             if client_callback.arity == 2
               @options[:version] = 1.0
               log_debug '[client] version = 1.0'
+              
+              deprecation_warning = %Q{
+##################################################
+# Deprecation Warning - Upgrade Client Callbacks
+# ==============================================
+# 
+# You are attempting to use two block arguments (presumably client and response)
+# in your client callback for the call to #{@options[:service].name}.client.#{@options[:method]}.
+# 
+# The next version of ruby-protobuf will completely remove the 
+# style of client calls that accepts two arguments in favor of a more explicit evented approach.
+# 
+# You should refactor the code before upgrading to the next version of this gem. An example of callback style v1:
+# 
+#     #{@options[:service]}.client.#{@options[:method]}(request) do |client, response|
+#       if client.failed?
+#         # do something with client.error or client.message
+#       else
+#         # do something with response
+#       end
+#     end
+# 
+# Refactor the previous example of callback style v1 usage to v2 with the following:
+# 
+#     #{@options[:service]}.client.#{@options[:method]}(request) do |c|
+#       c.on_failure do |error|
+#         # do something with error.code or error.message
+#       end
+#       c.on_success do |response|
+#         # do something with response
+#       end
+#     end
+# 
+##################################################
+}
+              log_warn deprecation_warning
+              STDOUT.puts deprecation_warning unless Protobuf::Logger.configured?
+              
               on_success {|res| client_callback.call(self, res) }
               on_failure {|err| client_callback.call(self, nil) }
             else

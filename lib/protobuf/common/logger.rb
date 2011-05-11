@@ -12,6 +12,10 @@ module Protobuf
         self.level = options[:level] if options[:level]
       end
       
+      def configured?
+        ! instance.nil?
+      end
+      
       # Use to reset the instance
       def reset_device!
         self.file = self.level = @__instance = nil
