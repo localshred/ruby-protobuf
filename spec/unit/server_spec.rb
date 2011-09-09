@@ -5,7 +5,7 @@ require 'spec/proto/test_service_impl'
 describe Protobuf::Rpc::Server do
   context 'when sending response objects' do
     it 'should be able to send a hash object as a response' do
-      server = Protobuf::Rpc::Server.new(nil)
+      server = Protobuf::Rpc::Server.new
       
       # Setup the right mocks
       server.instance_variable_set(:@klass, Spec::Proto::TestService)

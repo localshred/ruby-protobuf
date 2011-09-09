@@ -52,7 +52,7 @@ describe Protobuf::Rpc::Client do
     
     it 'should respond to defined service methods' do
       client = Spec::Proto::TestService.client
-      client.should_receive(:call_rpc).and_return(nil)
+      client.should_receive(:send_request).and_return(nil)
       expect { client.find(nil) }.should_not raise_error
     end
     
@@ -81,7 +81,7 @@ describe Protobuf::Rpc::Client do
     
     it 'should be able to create the correct request object if passed a hash' do
       client = Spec::Proto::TestService.client
-      client.should_receive(:call_rpc)
+      client.should_receive(:send_request)
       client.find({:name => 'Test Name', :active => false})
       client.options[:request].should be_a Spec::Proto::ResourceFindRequest
       client.options[:request].name.should == 'Test Name'

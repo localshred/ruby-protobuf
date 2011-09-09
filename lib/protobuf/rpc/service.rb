@@ -5,6 +5,8 @@ require 'protobuf/rpc/error'
 module Protobuf
   module Rpc
     
+    # Object to encapsulate the request/response types for a given service method
+    # 
     RpcMethod = Struct.new "RpcMethod", :service, :method, :request_type, :response_type
     
     class Service
@@ -19,6 +21,8 @@ module Protobuf
         :port => 9939
       }
       
+      # Class methods are intended for use on the client-side.
+      #
       class << self
         
         # You MUST add the method name to this list if you are adding
@@ -60,9 +64,10 @@ module Protobuf
           @rpcs ||= {}
         end
         
-        # Create a new client for the given service
-        # See client.rb for options available, though you will likely
-        # only be passing (if anything) a host, port, or the async setting
+        # Create a new client for the given service.
+        # See Client#initialize and ClientConnection::DEFAULT_OPTIONS
+        # for all available options.
+        #
         def client options={}
           configure
           Client.new({
@@ -73,7 +78,11 @@ module Protobuf
           }.merge(options))
         end
         
-        # Allows service-level configuration of location
+        # Allows service-level configuration of location.
+        # Useful for system-startup configuration of a service
+        # so that any Clients using the Service.client sugar
+        # will not have to configure the location each time.
+        # 
         def configure config={}
           locations[self] ||= {}
           locations[self][:host] = config[:host] if config.key? :host
@@ -83,17 +92,20 @@ module Protobuf
         # Shorthand call to configure, passing a string formatted as hostname:port
         # e.g. 127.0.0.1:9933
         # e.g. localhost:0
+        #
         def located_at location
           return if location.nil? or location.downcase.strip !~ /[a-z0-9.]+:\d+/
           host, port = location.downcase.strip.split ':'
           configure :host => host, :port => port.to_i
         end
         
+        # The host location of the service
         def host
           configure
           locations[self][:host] || DEFAULT_LOCATION[:host]
         end
         
+        # The port of the service on the destination server
         def port
           configure
           locations[self][:port] || DEFAULT_LOCATION[:port]
@@ -110,6 +122,7 @@ module Protobuf
       # is defined in the rpcs method list, we know that the rpc
       # stub has been created, but no implementing method provides the
       # functionality, so throw an appropriate error, otherwise go to super
+      # 
       def method_missing method, *params
         if rpcs.key? method
           exc = MethodNotFound.new "#{self}##{method} was defined as a valid rpc method, but was not implemented."
@@ -125,13 +138,16 @@ module Protobuf
         self.class.rpcs[self.class]
       end
       
+      # Callback register for the server when a service
+      # method calls rpc_failed. Called by Service#rpc_failed.
       def on_rpc_failed &rpc_failure_callback
         @rpc_failure_callback = rpc_failure_callback
       end
       
-      # Convenience method for automatically failing a service method.
-      # Note that this shortcuts the @async_responder paradigm. There is
-      # not any way to get around this currently (and I'm not sure you should want to)
+      # Automatically fail a service method.
+      # NOTE: This shortcuts the @async_responder paradigm. There is
+      # not any way to get around this currently (and I'm not sure you should want to).
+      #
       def rpc_failed message="RPC Failed while executing service method #{@current_method}"
         if @rpc_failure_callback.nil?
           exc = RuntimeError.new 'Unable to invoke rpc_failed, no failure callback is setup.' 
@@ -143,11 +159,20 @@ module Protobuf
         @rpc_failure_callback.call(error)
       end
       
+      # Callback register for the server to be notified
+      # when it is appropriate to generate a response to the client.
+      # Used in conjunciton with Service#send_response.
+      # 
       def on_send_response &responder
         @responder = responder
       end
       
-      # Should only be called by rpc methods who set @async_responder to true
+      # Tell the server to generate response and send it to the client.
+      #
+      # NOTE: If @async_responder is set to true, this MUST be called by
+      # the implementing service method, otherwise the connection
+      # will timeout since no data will be sent.
+      #
       def send_response
         if @responder.nil?
           exc = RuntimeError.new "Unable to send response, responder is nil. It appears you aren't inside of an RPC request/response cycle."
@@ -168,13 +193,14 @@ module Protobuf
       # that request and response are implicitly available, and
       # that response should be manipulated during the rpc method,
       # as there is no way to reliably determine the response like
-      # a normal (http-based) controller method would be able to
+      # a normal (http-based) controller method would be able to.
       #
       # Async behavior of responding can be achieved in the rpc method
       # by explicitly setting self.async_responder = true. It is then
       # the responsibility of the service method to send the response,
       # by calling self.send_response without any arguments. The rpc
       # server is setup to handle synchronous and asynchronous responses.
+      #
       def call_rpc method, pb_request
         @current_method = method
         

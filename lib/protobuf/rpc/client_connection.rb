@@ -211,6 +211,7 @@ module Protobuf
         @state = STATES[:completed]
         begin
           log_debug '[client-cnxn] Response proceessing complete'
+          @success_callback = @failure_callback = nil
           @complete_callback.call(@state) unless @complete_callback.nil?
         rescue
           log_error '[client-cnxn] Complete callback error encountered: %s' % $!.message
