@@ -123,13 +123,14 @@ module Protobuf
       # stub has been created, but no implementing method provides the
       # functionality, so throw an appropriate error, otherwise go to super
       # 
-      def method_missing method, *params
-        if rpcs.key? method
-          exc = MethodNotFound.new "#{self}##{method} was defined as a valid rpc method, but was not implemented."
+      def method_missing m, *params
+        if rpcs.key?(m)
+          exc = MethodNotFound.new "#{self}##{m} was defined as a valid rpc method, but was not implemented."
           log_error exc.message
           raise exc
         else
-          super method, args
+          log_error '-------------- [service] %s#%s not rpc method, passing to super' % [self.class.name, m.to_s]
+          super m, params
         end
       end
 

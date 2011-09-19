@@ -56,6 +56,10 @@ describe Protobuf::Rpc::Client do
       expect { client.find(nil) }.should_not raise_error
     end
     
+    it 'raises a NameError when accessing a var that does not exist' do
+      pending
+    end
+    
     it 'should be able to set and get local variables within client response blocks' do
       outer_value = 'OUTER'
       inner_value = 'INNER'
