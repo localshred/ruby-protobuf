@@ -15,7 +15,7 @@ Gem::Specification.new do |s|
   s.email = ["bj.neilsen@gmail.com"]
   s.executables = ["rprotoc"]
   s.extra_rdoc_files = ["History.txt", "README.txt"]
-  s.files = Dir.glob('lib/**/*.{erb,rb,y,ebnf,proto}') + ["History.txt", "README.txt", "Rakefile", "TODO", "bin/rprotoc"]
+  s.files = Dir.glob('lib/**/*.{erb,rb,y,ebnf,proto}') + ["History.txt", "README.txt", "Rakefile", "TODO", "bin/rprotoc", "bin/rpc_server"]
   s.homepage = %q{http://github.com/localshred/ruby-protobuf}
   s.rdoc_options = ["--main", "README.txt"]
   s.require_paths = ["lib"]
@@ -23,5 +23,6 @@ Gem::Specification.new do |s|
   s.summary = %q{Protocol Buffers for Ruby}
   s.test_files = Dir.glob('test/**/*.rb')
   s.add_dependency('eventmachine', ['~> 0.12.10'])
+  s.add_dependency('thor', ['~> 0.14.6'])
   s.add_development_dependency('rspec', ['~> 2.3.0'])
 end

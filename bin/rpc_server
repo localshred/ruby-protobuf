@@ -1,0 +1,112 @@
+#!/usr/bin/env ruby
+
+require 'optparse'
+require 'logger'
+require 'ruby_protobuf'
+require 'protobuf/rpc/server'
+
+[:INT, :QUIT, :TERM].each do |sig|
+  trap(sig) do
+    EventMachine.stop_event_loop if EventMachine.reactor_running?
+    Protobuf::Logger.info 'Shutdown complete'
+    $stdout.puts 'Shutdown complete'
+  end
+end
+
+# Default options
+options = {
+  :app => nil,
+  :env => ENV['RPC_SERVER_ENV'] || 'development',
+  :host => '127.0.0.1',
+  :port => 9595,
+  :log => File.expand_path('./protobuf.log'),
+  :level => ::Logger::INFO,
+  :debug => false
+}
+
+parser = OptionParser.new do |opts|
+  opts.banner = "Usage: rpc_server [options] app_file.rb"
+
+  opts.on("-e ENVIRONMENT", "--env=ENVIRONMENT", "Environment to run the server") do |v|
+    options[:env] = ENV['RACK_ENV'] = ENV['RAILS_ENV'] = ENV['APP_ENV'] = v
+  end
+  
+  opts.on("-h HOST", "--host=HOST", "Server host") do |v|
+    options[:host] = v
+  end
+  
+  opts.on("-p PORT", "--port=PORT", Integer, "Server port") do |v|
+    options[:log] = v
+  end
+  
+  opts.on("-l LOG_FILE", "--log_file=LOG_FILE", "Log file or device") do |v|
+    options[:log] = v
+  end
+  
+  opts.on("-v N", "--level=N", Integer, "Log level to use 0-5 (see http://www.ruby-doc.org/stdlib/libdoc/logger/rdoc/)") do |v|
+    options[:level] = v.to_i
+  end
+  
+  opts.on("-d", "--[no-]debug", "Run in debug mode") do |v|
+    options[:debug] = v
+    options[:level] = ::Logger::DEBUG if v === true
+  end
+
+  opts.separator ""
+  opts.separator "Common options:"
+
+  opts.on_tail("-h", "--help", "Show this message") do
+    puts opts
+    exit
+  end
+
+  opts.on_tail("--version", "Show version") do
+    puts RubyProtobuf::VERSION
+    exit
+  end
+end
+
+parser.parse!
+puts options.inspect
+
+begin
+  if ARGV.empty?
+    raise 'You must specify an app file to use.'
+  else
+    options[:app] = ARGV.pop
+    puts options[:app].inspect
+    raise 'Invalid app file specified (%s).' % options[:app] unless File.exists?(options[:app])
+  end
+  
+  # Configure the Protobuf::Logger
+  Protobuf::Logger.configure :file => options[:log], :level => options[:level]
+
+  # Output the options
+  Protobuf::Logger.debug 'Debugging options:'
+  Protobuf::Logger.debug options.inspect
+
+  # Ensure we're catching errors and logging appropriately
+  EventMachine.error_handler do |error|
+    raise error if error.message == 'no acceptor'
+    Protobuf::Logger.error error.message
+    Protobuf::Logger.error error.backtrace.join("\n")
+  end
+
+  # Pull in the code that will handle everything
+  require options[:app]
+  
+  # Startup and run the service
+  EM.schedule do
+    EventMachine.start_server(options[:host], options[:port], Protobuf::Rpc::Server) && \
+      Protobuf::Logger.info('RPC Server listening at %s:%d in %s' % [options[:host], options[:port], options[:env]])
+  end
+
+  # Join or start the reactor
+  EM.reactor_running? ? EM.reactor_thread.join : EM.run
+rescue Exception
+  msg = 'ERROR: RPC Server failed to start. %s' % $!.message
+  $stderr.puts msg, *($!.backtrace)
+  Protobuf::Logger.error msg
+  Protobuf::Logger.error $!.backtrace.join("\n")
+  exit 1
+end
