@@ -20,7 +20,6 @@ class CompilerTest < Test::Unit::TestCase
 
 require 'protobuf/message/message'
 require 'protobuf/message/enum'
-require 'protobuf/message/service'
 require 'protobuf/message/extend'
 
 class M < ::Protobuf::Message
@@ -75,7 +74,6 @@ end
 # }
 require 'protobuf/message/message'
 require 'protobuf/message/enum'
-require 'protobuf/message/service'
 require 'protobuf/message/extend'
 
 module Tutorial
@@ -129,7 +127,6 @@ end
 
 require 'protobuf/message/message'
 require 'protobuf/message/enum'
-require 'protobuf/message/service'
 require 'protobuf/message/extend'
 
 module Test
