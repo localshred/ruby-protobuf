@@ -8,7 +8,7 @@ require 'protobuf/rpc/stat'
 # Handles client connections to the server
 module Protobuf
   module Rpc
-    ClientError = Struct.new(:ClientError, :code, :message)
+    ClientError = Struct.new("ClientError", :code, :message)
     
     class ClientConnection < EM::Connection
       include Protobuf::Logger::LogMethods

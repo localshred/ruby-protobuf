@@ -94,4 +94,35 @@ describe Protobuf::Rpc::Client do
     
   end
   
+  describe '#synchronize_or_return' do
+    
+    context 'when a timeout error occurs' do
+      it 'returns a timeout error' do
+        client = Spec::Proto::TestService.client :timeout => 1
+        client.stub(:ensure_callback).and_return(proc {|err|
+          err.should be_a Protobuf::Rpc::ClientError
+          err.message.should == 'Client timeout of 1 seconds expired'
+          err.code.should == Protobuf::Socketrpc::ErrorReason::RPC_ERROR
+        })
+        Timeout.timeout(2) { client.synchronize_or_return }
+      end
+    end
+    
+    context 'when any other error occurs' do
+      it 'returns the error' do
+        client = Spec::Proto::TestService.client
+        client.stub(:ensure_callback).and_return(proc {|err|
+          err.should be_a Protobuf::Rpc::ClientError
+          err.message.should == 'Client failed: This is another type of error'
+          err.code.should == Protobuf::Socketrpc::ErrorReason::RPC_ERROR
+        })
+        Timeout.timeout(2) {
+          Timeout.stub(:timeout).and_raise(RuntimeError.new('This is another type of error'))
+          client.synchronize_or_return
+        }
+      end
+    end
+    
+  end
+  
 end

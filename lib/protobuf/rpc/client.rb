@@ -174,11 +174,8 @@ module Protobuf
               message = 'Client failed: %s' % ex.message
             end
           
-            error = ClientError.new({
-              :code => Protobuf::Socketrpc::ErrorReason::RPC_ERROR,
-              :message => message
-            })
-            ensure_callback.call(error)
+            err = ClientError.new(Protobuf::Socketrpc::ErrorReason::RPC_ERROR, message)
+            ensure_callback.call(err)
           end
         else
           true
