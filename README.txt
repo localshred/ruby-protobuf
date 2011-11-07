@@ -1,6 +1,8 @@
-= RubyProtobuf
+= IMPORTANT NOTE
 
-* http://github.com/dcardon/ruby-protobuf
+This repository will no longer be maintained and has been replaced by http://github.com/localshred/protobuf. This new repo is the new source and should be used instead (along with the accompanying gem "protobuf").
+
+= RubyProtobuf
 
 == DESCRIPTION:
 
